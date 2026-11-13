@@ -1,0 +1,27 @@
+{
+    "stores": [
+      {
+        "name": "Piese-Laptop",
+        "domain": "piese-laptop.ro",
+        "search_url": "https://www.piese-laptop.ro/cautare?q="
+      },
+      {
+        "name": "eMAG",
+        "domain": "emag.ro",
+        "search_url": "https://www.emag.ro/search/"
+      },
+      {
+        "name": "PC Garage",
+        "domain": "pcgarage.ro",
+        "module": "pc_garage"
+      },
+      {
+        "name": "Interlink",
+        "domain": "interlink.ro",
+        "module": "interlink"
+      }
+ 
+    ]
+  }
+
+  
