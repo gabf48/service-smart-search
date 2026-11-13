@@ -1,200 +1,83 @@
-import asyncio
-import re
-from scraper import load_stores, search_parts
+from config import setup_page
+from filtering import filter_and_sort_data
+from scraper import load_stores
 import streamlit as st
+from ui.filters import render_filters_and_sort
+from ui.results import render_results
+from ui.search_form import render_search_form
+from ui.sidebar import render_sidebar
+from utils import is_irrelevant_product
 
-st.set_page_config(
-    page_title="Service Smart | Motor Global Piese", page_icon="⚡", layout="wide"
-)
-
-st.markdown(
-    """
-<style>
-.main { background-color: #0e1117; }
-.stTextInput input { background-color: #1a1c23; color: #ffffff; border: 1px solid #2d3748; border-radius: 10px; padding: 12px; font-size: 1.1rem; }
-.stNumberInput input { background-color: #1a1c23; color: #ffffff; border: 1px solid #2d3748; border-radius: 8px; }
-.stButton button { background: linear-gradient(135deg, #00b4d8 0%, #0077b6 100%); color: white; font-weight: bold; border: none; border-radius: 10px; padding: 0.7rem 1.5rem; width: 100%; font-size: 1.05rem; }
-.result-card { background-color: #161b22; border: 1px solid #30363d; padding: 18px; border-radius: 10px; margin-bottom: 12px; transition: border-color 0.2s; }
-.result-card:hover { border-color: #58a6ff; }
-div[data-testid="stForm"] small, div[data-testid="input-instruction"], .stTextInput small { display: none !important; }
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
-
-def parse_price_for_sorting(price_str):
-  if not price_str or "N/A" in price_str:
-    return float("inf")
-  clean = (
-      price_str.lower()
-      .replace("de la", "")
-      .replace("lei", "")
-      .replace("ron", "")
-      .strip()
-  )
-  clean = clean.replace(".", "").replace(",", ".")
-  match = re.search(r"(\d+(\.\d+)?)", clean)
-  if match:
-    try:
-      return float(match.group(1))
-    except ValueError:
-      pass
-  return float("inf")
-
-
-stores = load_stores()
-
-# --- SIDEBAR: Magazine Active cu Checkbox-uri ---
-with st.sidebar:
-  st.title("⚡ Service Smart")
-  st.markdown("### 📂 Magazine Active")
-
-  store_checkboxes = {}
-  for s in stores:
-    # Fiecare magazin are un checkbox bifat by default (value=True)
-    store_checkboxes[s["name"]] = st.checkbox(
-        f"🌐 {s['name']} ({s['domain']})", value=True, key=f"chk_{s['name']}"
-    )
-
-  st.divider()
-  st.info("Poți adăuga magazine noi direct în `websites.json`.")
-
-# --- CONȚINUT PRINCIPAL: Motorul Global de Căutare (CENTRAL) ---
-st.title("⚡ Motor Global de Căutare Piese")
-st.markdown(
-    "Interogare simultană în timp real în stocurile magazinelor partenere."
-)
-st.markdown("")
+setup_page()
 
 if "search_results" not in st.session_state:
   st.session_state.search_results = None
 if "last_query" not in st.session_state:
   st.session_state.last_query = ""
 
-with st.form(key="search_form"):
-  col1, col2 = st.columns([5, 1])
-  with col1:
-    part_input = st.text_input(
-        "Introdu Part Number sau produs:",
-        placeholder="ex: G502, FX607VU, Memorie Corsair...",
-        label_visibility="collapsed",
-    )
-  with col2:
-    search_button = st.form_submit_button(
-        "🔍 Caută", use_container_width=True
-    )
+raw_data = st.session_state.search_results
+cleaned_data = (
+    [item for item in raw_data if not is_irrelevant_product(item["Produs"])]
+    if raw_data
+    else raw_data
+)
 
-if search_button and part_input:
-  st.session_state.last_query = part_input.strip()
-  with st.spinner(
-      f"Se interogează stocurile pentru `{st.session_state.last_query}`..."
-  ):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    st.session_state.search_results = loop.run_until_complete(
-        search_parts(st.session_state.last_query)
-    )
+stores = load_stores()
+store_checkboxes, tag_checkboxes = render_sidebar(stores, cleaned_data)
+
+st.title("⚡ Motor Global de Căutare Piese")
+st.markdown(
+    "Interogare simultană în timp real în stocurile magazinelor partenere."
+)
+st.markdown("")
+
+render_search_form()
 
 st.markdown("---")
 
-data = st.session_state.search_results
+data = cleaned_data
 query = st.session_state.last_query
 
 if data is not None:
   if data:
-    with st.expander(
-        "🎛️ Filtre avansate și Sortare după Preț", expanded=True
-    ):
-      f_col1, f_col2, f_col3 = st.columns(3)
-      with f_col1:
-        sort_option = st.selectbox(
-            "Ordonare preț",
-            ["Fără sortare", "Preț crescător 📈", "Preț descrescător 📉"],
-        )
-      with f_col2:
-        min_price = st.number_input(
-            "Preț minim (Lei)", min_value=0.0, value=0.0, step=50.0
-        )
-      with f_col3:
-        max_price = st.number_input(
-            "Preț maxim (Lei)",
-            min_value=0.0,
-            value=0.0,
-            max_value=200000.0,
-            step=100.0,
-            help="Lăsați 0.0 pentru fără limită maximă",
-        )
+    sort_option, min_price, max_price = render_filters_and_sort()
 
-   # 1. Aplicăm filtrele de magazin (bifat/debifat) și preț
-    filtered_data = []
-    hidden_by_store = 0
-
-    for item in data:
-      # Verificăm dacă magazinul este bifat în sidebar
-      if not store_checkboxes.get(item["Magazin"], True):
-        hidden_by_store += 1
-        continue
-
-      p_val = parse_price_for_sorting(item["Preț"])
-      if p_val == float("inf"):
-        filtered_data.append(item)
-        continue
-
-      if min_price > 0 and p_val < min_price:
-        continue
-      if max_price > 0 and p_val > max_price:
-        continue
-      filtered_data.append(item)
-
-    # 2. Aplicăm sortarea
-    if sort_option == "Preț crescător 📈":
-      filtered_data = sorted(
-          filtered_data, key=lambda x: parse_price_for_sorting(x["Preț"])
-      )
-    elif sort_option == "Preț descrescător 📉":
-      filtered_data = sorted(
-          filtered_data,
-          key=lambda x: parse_price_for_sorting(x["Preț"]),
-          reverse=True,
-      )
+    filtered_data, hidden_by_store, hidden_by_tag = filter_and_sort_data(
+        data,
+        store_checkboxes,
+        tag_checkboxes,
+        sort_option,
+        min_price,
+        max_price,
+    )
 
     st.success(
         f"S-au găsit **{len(filtered_data)}** oferte afișate (din {len(data)}"
         f" totale) pentru `{query}`."
     )
+
+    info_msgs = []
     if hidden_by_store > 0:
-      st.info(
-          f"ℹ️ Alte **{hidden_by_store}** oferte au fost ascunse deoarece"
-          " magazinul corespunzător este debifat în sidebar."
-      )
+      info_msgs.append(f"{hidden_by_store} oferte ascunse (magazin debifat)")
+    if hidden_by_tag > 0:
+      info_msgs.append(f"{hidden_by_tag} oferte ascunse (categorie debifată)")
+
+    if info_msgs:
+      st.info("ℹ️ " + " | ".join(info_msgs))
+
     st.markdown("---")
 
     if filtered_data:
-      for item in filtered_data:
-        card_html = f"""
-                <div class="result-card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <span style="background: #1f6feb; color: white; padding: 3px 10px; border-radius: 5px; font-size: 0.8rem; font-weight: bold;">{item["Magazin"]}</span>
-                        <span style="font-size: 1.25rem; font-weight: 700; color: #3fb950;">{item["Preț"]}</span>
-                    </div>
-                    <div style="font-size: 1.05rem; font-weight: 600; margin-bottom: 6px;">
-                        <a href="{item["Sursă / Link"]}" target="_blank" style="color: #f0f6fc; text-decoration: none;" onMouseOver="this.style.color='#58a6ff'" onMouseOut="this.style.color='#f0f6fc'">{item["Produs"]}</a>
-                    </div>
-                    <div style="font-size: 0.82rem;">
-                        <a href="{item["Sursă / Link"]}" target="_blank" style="color: #8b949e; text-decoration: none;" onMouseOver="this.style.color='#58a6ff'" onMouseOut="this.style.color='#8b949e'">🔗 Deschide pagina produsului în magazin</a>
-                    </div>
-                </div>
-                """
-        st.markdown(card_html, unsafe_allow_html=True)
+      render_results(filtered_data)
     else:
       st.warning(
-          "⚠️ Niciun produs nu corespunde filtrelor de preț și magazine"
-          " selectate."
+          "⚠️ Niciun produs nu corespunde filtrelor de preț, magazin și"
+          " categorii selectate."
       )
   else:
     st.warning(
-        f"⚠️ Niciun magazin din listă nu a returnat un produs pentru `{query}`."
+        f"⚠️ Niciun magazin din listă nu a returnat un produs valid pentru"
+        f" `{query}`."
     )
 else:
   st.info(

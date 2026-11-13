@@ -2,7 +2,7 @@ import asyncio
 import importlib
 import json
 import os
-from scrapers import emag, piese_laptop
+from scrapers import emag, piese_laptop, powerlaptop
 import httpx
 
 
@@ -34,6 +34,13 @@ async def search_parts(part_number: str):
       tasks.append(emag.scrape(client, part_number))
     except Exception as e:
       print(f"Eroare la emag: {e}")
+
+    # 3. Scraper Powerlaptop
+    try:
+      importlib.reload(powerlaptop)
+      tasks.append(powerlaptop.scrape(client, part_number))
+    except Exception as e:
+      print(f"Eroare la powerlaptop: {e}")
 
     if not tasks:
       return []
