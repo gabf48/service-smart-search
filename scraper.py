@@ -4,6 +4,7 @@ import json
 import os
 from scrapers import emag, onlaptop, piese_laptop, powerlaptop
 import httpx
+from utils.filters import is_irrelevant_product  # <--- Importul filtrului global
 
 
 def load_stores():
@@ -63,4 +64,15 @@ async def search_parts(part_number: str):
     for store_res in responses:
       all_results.extend(store_res)
 
-  return all_results
+    # 🛡️ FILTRARE GLOBALĂ: Curățăm rezultatele de la TOATE magazinele dintr-un singur loc
+    filtered_results = []
+    for item in all_results:
+      title = item.get("Produs", "")
+      
+      # Dacă produsul este irelevant (telefon, tabletă, casnic, etc.), îl tăiem din start
+      if is_irrelevant_product(title, part_number):
+        continue
+        
+      filtered_results.append(item)
+
+    return filtered_results

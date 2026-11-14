@@ -1,5 +1,5 @@
-from utils import get_product_tag, parse_price_for_sorting
-
+from utils.tags import get_product_tag
+from utils.filters import parse_price_for_sorting
 
 def filter_and_sort_data(
     data,

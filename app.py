@@ -6,7 +6,9 @@ from ui.filters import render_filters_and_sort
 from ui.results import render_results
 from ui.search_form import render_search_form
 from ui.sidebar import render_sidebar
-from utils import is_irrelevant_product
+from utils.filters import is_irrelevant_product, parse_price_for_sorting
+from utils.formatting import highlight_search_terms
+from utils.tags import get_product_tag
 
 setup_page()
 
