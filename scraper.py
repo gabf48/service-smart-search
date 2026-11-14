@@ -2,7 +2,7 @@ import asyncio
 import importlib
 import json
 import os
-from scrapers import emag, piese_laptop, powerlaptop
+from scrapers import emag, onlaptop, piese_laptop, powerlaptop
 import httpx
 
 
@@ -14,7 +14,12 @@ def load_stores():
         return data.get("stores", [])
     except Exception:
       pass
-  return []
+  return [
+      {"name": "Powerlaptop", "domain": "powerlaptop.ro"},
+      {"name": "eMAG", "domain": "emag.ro"},
+      {"name": "Piese-Laptop", "domain": "piese-laptop.ro"},
+      {"name": "OnLaptop", "domain": "onlaptop.ro"},
+  ]
 
 
 async def search_parts(part_number: str):
@@ -41,6 +46,13 @@ async def search_parts(part_number: str):
       tasks.append(powerlaptop.scrape(client, part_number))
     except Exception as e:
       print(f"Eroare la powerlaptop: {e}")
+
+    # 4. Scraper OnLaptop
+    try:
+      importlib.reload(onlaptop)
+      tasks.append(onlaptop.scrape(client, part_number))
+    except Exception as e:
+      print(f"Eroare la onlaptop: {e}")
 
     if not tasks:
       return []

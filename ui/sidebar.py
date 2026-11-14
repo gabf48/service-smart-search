@@ -3,40 +3,98 @@ from utils import get_product_tag
 
 
 def render_sidebar(stores, data):
-  # Stil CSS cu padding redus și eliminarea oricărei scurtări de text
+  # 1. Gestionarea stării temei în session_state
+  if "theme" not in st.session_state:
+    st.session_state.theme = "dark"
+
+  # 2. Palete de culori pentru Dark și Light
+  themes = {
+      "dark": {
+          "bg_color": "#0d1117",
+          "card_bg": "#161b22",
+          "text_color": "#c9d1d9",
+          "text_muted": "#8b949e",
+          "border_color": "#30363d",
+          "btn_bg": "#21262d",
+          "btn_hover": "#30363d",
+          "card_hover": "#1f242c",
+      },
+      "light": {
+          "bg_color": "#ffffff",
+          "card_bg": "#f6f8fa",
+          "text_color": "#24292f",
+          "text_muted": "#57606a",
+          "border_color": "#d0d7de",
+          "btn_bg": "#f3f4f6",
+          "btn_hover": "#ebf0f4",
+          "card_hover": "#eaeef2",
+      },
+  }
+
+  t = themes[st.session_state.theme]
+
+  # 3. Injectarea dinamică a stilurilor CSS
   st.sidebar.markdown(
-      """
+      f"""
         <style>
-            section[data-testid="stSidebar"] div.stButton > button {
-                background-color: #21262d !important;
-                color: #c9d1d9 !important;
-                border: 1px solid #30363d !important;
+            .stApp {{
+                background-color: {t["bg_color"]} !important;
+                color: {t["text_color"]} !important;
+            }}
+            section[data-testid="stSidebar"] div.stButton > button {{
+                background-color: {t["btn_bg"]} !important;
+                color: {t["text_color"]} !important;
+                border: 1px solid {t["border_color"]} !important;
                 border-radius: 4px !important;
-                font-size: 11px !important;
+                font-size: 12px !important;
                 font-weight: 500 !important;
-                padding: 2px 2px !important;
-                min-height: 24px !important;
+                padding: 4px 8px !important;
+                min-height: 28px !important;
                 width: 100% !important;
                 box-shadow: none !important;
-                white-space: nowrap !important;
                 transition: all 0.15s ease-in-out;
-            }
-            section[data-testid="stSidebar"] div.stButton > button:hover {
-                background-color: #30363d !important;
-                color: #ffffff !important;
-                border-color: #8b949e !important;
-            }
-            section[data-testid="stSidebar"] div.stButton > button:active {
-                background-color: #1f6feb !important;
-                color: #ffffff !important;
-                border-color: #388bfd !important;
-            }
+            }}
+            section[data-testid="stSidebar"] div.stButton > button:hover {{
+                background-color: {t["btn_hover"]} !important;
+                border-color: {t["text_muted"]} !important;
+            }}
+            .result-card {{
+                background-color: {t["card_bg"]} !important;
+                border: 1px solid {t["border_color"]} !important;
+                border-radius: 8px;
+                padding: 16px;
+                margin-bottom: 12px;
+                transition: transform 0.15s ease, border-color 0.15s ease;
+            }}
+            .result-card:hover {{
+                border-color: #1f6feb !important;
+            }}
         </style>
     """,
       unsafe_allow_html=True,
   )
 
-  # --- MAGAZINE ACTIVE ---
+  # --- HEADER SIDEBAR & BUTON TEMĂ ---
+  st.sidebar.markdown(
+      f'<p style="font-weight: 700; font-size: 16px; margin-bottom: 8px;'
+      f' color: {t["text_color"]};">⚙️ Meniu Service</p>',
+      unsafe_allow_html=True,
+  )
+
+  theme_label = (
+      "☀️ Schimbă pe Modul Light"
+      if st.session_state.theme == "dark"
+      else "🌙 Schimbă pe Modul Dark"
+  )
+  if st.sidebar.button(theme_label, key="btn_toggle_theme"):
+    st.session_state.theme = (
+        "light" if st.session_state.theme == "dark" else "dark"
+    )
+    st.rerun()
+
+  st.sidebar.markdown("---")
+
+  # --- SECȚIUNEA 1: MAGAZINE ACTIVE ---
   store_domains = {s["name"]: s.get("domain", "") for s in stores}
   store_counts = {}
   if data:
@@ -50,13 +108,11 @@ def render_sidebar(stores, data):
       else [s["name"] for s in stores]
   )
 
-  # Proporții optimizate: titlul primește mai puțin, butoanele primesc spațiu generos
   c1, c2, c3 = st.sidebar.columns([1.3, 1.3, 1.4])
   with c1:
     st.markdown(
-        "<p"
-        ' style="font-weight: 600; font-size: 13px; margin-top: 4px;'
-        ' color: #e6edf3;">🗂️ Magazine</p>',
+        f'<p style="font-weight: 600; font-size: 13px; margin-top: 4px;'
+        f' color: {t["text_color"]};">🗂️ Magazine</p>',
         unsafe_allow_html=True,
     )
   with c2:
@@ -79,13 +135,17 @@ def render_sidebar(stores, data):
         if domain
         else f"🌐 {store} — {count}"
     )
-    store_checkboxes[store] = st.sidebar.checkbox(
-        label, value=True, key=f"store_{store}"
-    )
+
+    # Inițializăm starea în session_state dacă nu există, fără a pasa value= în checkbox
+    key_name = f"store_{store}"
+    if key_name not in st.session_state:
+      st.session_state[key_name] = True
+
+    store_checkboxes[store] = st.sidebar.checkbox(label, key=key_name)
 
   st.sidebar.markdown("---")
 
-  # --- CATEGORII / TAGURI ---
+  # --- SECȚIUNEA 2: CATEGORII / TAGURI ---
   active_store_data = (
       [item for item in data if store_checkboxes.get(item["Magazin"], True)]
       if data
@@ -116,27 +176,30 @@ def render_sidebar(stores, data):
   c4, c5, c6 = st.sidebar.columns([1.3, 1.3, 1.4])
   with c4:
     st.markdown(
-        "<p"
-        ' style="font-weight: 600; font-size: 13px; margin-top: 4px;'
-        ' color: #e6edf3;">🏷️ Categorii</p>',
+        f'<p style="font-weight: 600; font-size: 13px; margin-top: 4px;'
+        f' color: {t["text_color"]};">🏷️ Categorii</p>',
         unsafe_allow_html=True,
     )
   with c5:
     if st.button("Toate", key="btn_all_tags"):
-      for t in all_tags:
-        st.session_state[f"tag_{t}"] = True
+      for t_item in all_tags:
+        st.session_state[f"tag_{t_item}"] = True
       st.rerun()
   with c6:
     if st.button("Niciunul", key="btn_none_tags"):
-      for t in all_tags:
-        st.session_state[f"tag_{t}"] = False
+      for t_item in all_tags:
+        st.session_state[f"tag_{t_item}"] = False
       st.rerun()
 
   tag_checkboxes = {}
   for tag in all_tags:
     count = tag_counts.get(tag, 0)
+    key_name = f"tag_{tag}"
+    if key_name not in st.session_state:
+      st.session_state[key_name] = True
+
     tag_checkboxes[tag] = st.sidebar.checkbox(
-        f"{tag} — {count}", value=True, key=f"tag_{tag}"
+        f"{tag} — {count}", key=key_name
     )
 
   return store_checkboxes, tag_checkboxes
