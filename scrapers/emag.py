@@ -69,9 +69,7 @@ async def scrape(client: httpx.AsyncClient, part_number: str):
           if title_elem
           else link_tag.get_text(" ", strip=True)
       )
-      # BUG INTRODUS: Trunchierea la 45 de caractere ÎNAINTE de verificarea keywords
-      # taie codul piesei care la eMAG apare de obicei la finalul titlului lung!
-      title = html.escape(" ".join(raw_title.split()))[:45]
+      title = html.escape(" ".join(raw_title.split()))
 
       if not title or len(title) < 5:
         continue
@@ -86,12 +84,14 @@ async def scrape(client: httpx.AsyncClient, part_number: str):
         if matches < min_matches:
           continue
 
+      # Extragere preț corectată pentru structura eMAG
       price = "N/A"
       price_container = card.select_one(
           ".product-new-price, .default-price, p.product-new-price"
       )
 
       if price_container:
+        # Curățăm textul din containerul de preț (ex: "849 99 Lei" devine "849.99 Lei")
         p_text = price_container.get_text(" ", strip=True)
         p_text = re.sub(
             r"(\d+)\s+(\d{2})\s*(lei|ron)",
@@ -102,6 +102,7 @@ async def scrape(client: httpx.AsyncClient, part_number: str):
         if "lei" in p_text.lower() or "ron" in p_text.lower():
           price = html.escape(p_text)
       else:
+        # Fallback generalist dacă nu găsește containerul specific
         card_text = card.get_text(" ", strip=True)
         price_match = re.search(
             r"(\d+\s*\d*([.,]\d+)?)\s*(lei|ron)", card_text, re.IGNORECASE
@@ -109,12 +110,36 @@ async def scrape(client: httpx.AsyncClient, part_number: str):
         if price_match:
           price = html.escape(price_match.group(0))
 
+      image_url = ""
+      img_tag = card.select_one("img")
+      if img_tag:
+        srcset = img_tag.get("data-srcset") or img_tag.get("srcset") or ""
+        srcset_url = ""
+        if srcset:
+          srcset_url = srcset.split(",")[0].strip().split(" ")[0].strip()
+        image_url = (
+            img_tag.get("data-src")
+            or img_tag.get("data-lazy-src")
+            or img_tag.get("data-original")
+            or srcset_url
+            or img_tag.get("src")
+            or ""
+        )
+        image_url = (image_url or "").strip()
+        if image_url.startswith("data:"):
+          image_url = ""
+        if image_url.startswith("//"):
+          image_url = "https:" + image_url
+        elif image_url.startswith("/"):
+          image_url = f"https://www.{domain}{image_url}"
+
       if not any(r["Sursă / Link"] == link for r in results):
         results.append({
             "Magazin": store_name,
             "Sursă / Link": link,
-            "Produs": title + ("..." if len(raw_title) > 45 else ""),
+            "Produs": title[:95] + ("..." if len(title) > 95 else ""),
             "Preț": price,
+            "Imagine": image_url,
         })
 
     return results

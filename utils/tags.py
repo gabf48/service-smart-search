@@ -1,13 +1,11 @@
+import re
+
+
 def classify_category(title: str) -> str:
   if not title:
     return "Piese / Altele"
-    
-  t = title.lower()
 
-  # BUG INTRODUS: "ram" face match pe orice cuvânt care conține "ram" (ex: "rama display", "programator", "ecran panoramic")
-  # și este pus ÎNAINTEA categoriilor de Display și Carcase!
-  if any(kw in t for kw in ["ram", "memorie"]):
-    return "Memorie RAM"
+  t = title.lower()
 
   # 1. Coolere & Sisteme de Răcire
   if any(kw in t for kw in ["cooler", "ventilator", "heatsink", "radiator"]):
@@ -33,6 +31,10 @@ def classify_category(title: str) -> str:
   if any(kw in t for kw in ["ssd", "hdd", "hard disk", "nvme", "m.2"]):
     return "Stocare"
 
+  # 7. Memorie RAM ("ram" doar ca cuvânt întreg, ca să nu prindă "program", "frame" etc.)
+  if re.search(r"\bram\b", t) or "memorie" in t:
+    return "Memorie RAM"
+
   # 8. Elemente Carcase / Rame
   if any(kw in t for kw in ["balamale", "rama display", "ramă", "carcasa", "carcasă"]):
     return "Ramă Display"
@@ -47,7 +49,7 @@ def classify_category(title: str) -> str:
 
   # 11. Laptopuri întregi
   if "laptop" in t and not any(p in t for p in [
-      "piese", "baterie", "tastatura", "display", "cooler", "incarcator", 
+      "piese", "baterie", "tastatura", "display", "cooler", "incarcator",
       "mufa", "ssd", "ram", "alimentator", "ventilator", "ecran"
   ]):
     return "Laptopuri"
@@ -55,4 +57,5 @@ def classify_category(title: str) -> str:
   return "Piese / Altele"
 
 
+# Alias arhitectural pentru compatibilitate totală în tot proiectul
 get_product_tag = classify_category

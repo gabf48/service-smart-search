@@ -160,12 +160,40 @@ async def scrape(client, query: str):
         if price == "N/A":
           continue
 
+        image_url = ""
+        img_elem = await p.query_selector("img")
+        if img_elem:
+          srcset = (
+              await img_elem.get_attribute("data-srcset")
+              or await img_elem.get_attribute("srcset")
+              or ""
+          )
+          srcset_url = ""
+          if srcset:
+            srcset_url = srcset.split(",")[0].strip().split(" ")[0].strip()
+          image_url = (
+              await img_elem.get_attribute("data-src")
+              or await img_elem.get_attribute("data-lazy-src")
+              or await img_elem.get_attribute("data-original")
+              or srcset_url
+              or await img_elem.get_attribute("src")
+              or ""
+          )
+          image_url = (image_url or "").strip()
+          if image_url.startswith("data:"):
+            image_url = ""
+          if image_url.startswith("//"):
+            image_url = "https:" + image_url
+          elif image_url.startswith("/"):
+            image_url = "https://www.onlaptop.ro" + image_url
+
         if link and not any(r["Sursă / Link"] == link for r in results):
           results.append({
               "Magazin": "OnLaptop",
               "Produs": title,
               "Preț": price,
               "Sursă / Link": link,
+              "Imagine": image_url,
           })
 
     except Exception as e:

@@ -55,6 +55,28 @@ async def scrape(client: httpx.AsyncClient, query: str):
           if parts:
             price = parts[-1] + " RON"
 
+        image_url = ""
+        img_el = item.select_one("img")
+        if img_el:
+          srcset = img_el.get("data-srcset") or img_el.get("srcset") or ""
+          srcset_url = ""
+          if srcset:
+            srcset_url = srcset.split(",")[0].strip().split(" ")[0].strip()
+          image_url = (
+              img_el.get("data-src")
+              or img_el.get("data-lazy-src")
+              or img_el.get("data-original")
+              or srcset_url
+              or img_el.get("src")
+              or ""
+          ).strip()
+          if image_url.startswith("data:"):
+            image_url = ""
+          if image_url.startswith("//"):
+            image_url = "https:" + image_url
+          elif image_url.startswith("/"):
+            image_url = "https://www.powerlaptop.ro" + image_url
+
         if len(title) > 3:
           results.append(
               {
@@ -62,6 +84,7 @@ async def scrape(client: httpx.AsyncClient, query: str):
                   "Produs": title,
                   "Preț": price,
                   "Sursă / Link": link,
+                  "Imagine": image_url,
               }
           )
 

@@ -1,6 +1,23 @@
 import streamlit as st
 from utils import get_product_tag
 
+# Cheile sunt exact valorile întoarse de classify_category (fără emoji).
+# Emoji-ul se folosește doar la afișarea etichetei în sidebar.
+TAG_ICONS = {
+    "Laptopuri": "💻",
+    "Consumabile": "🖨️",
+    "Încărcătoare": "⚡",
+    "Coolere": "❄️",
+    "Mufe & Conectori": "🔌",
+    "Ramă Display": "🖼️",
+    "Memorie RAM": "🧠",
+    "Stocare": "💾",
+    "Baterie": "🔋",
+    "Tastatură": "⌨️",
+    "Display": "🖥️",
+    "Piese / Altele": "🔧",
+}
+
 
 def render_sidebar(stores, data):
   # 1. Gestionarea stării temei în session_state
@@ -158,20 +175,7 @@ def render_sidebar(stores, data):
       tag = get_product_tag(item["Produs"])
       tag_counts[tag] = tag_counts.get(tag, 0) + 1
 
-  all_tags = [
-      "💻 Laptopuri",
-      "🖨️ Consumabile",
-      "⚡ Încărcătoare",
-      "❄️ Coolere",
-      "🔌 Mufe & Conectori",
-      "🖼️ Ramă Display",
-      "🧠 Memorie RAM",
-      "💾 Stocare",
-      "🔋 Baterie",
-      "⌨️ Tastatură",
-      "🖥️ Display",
-      "🔧 Piese / Altele",
-  ]
+  all_tags = list(TAG_ICONS)
 
   c4, c5, c6 = st.sidebar.columns([1.3, 1.3, 1.4])
   with c4:
@@ -199,7 +203,7 @@ def render_sidebar(stores, data):
       st.session_state[key_name] = True
 
     tag_checkboxes[tag] = st.sidebar.checkbox(
-        f"{tag} — {count}", key=key_name
+        f"{TAG_ICONS[tag]} {tag} — {count}", key=key_name
     )
 
   return store_checkboxes, tag_checkboxes

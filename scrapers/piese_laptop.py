@@ -72,12 +72,35 @@ async def scrape(client: httpx.AsyncClient, part_number: str):
       if price_match:
         price = html.escape(price_match.group(0))
 
+      image_url = ""
+      img_tag = card.select_one("img")
+      if img_tag:
+        srcset = img_tag.get("data-srcset") or img_tag.get("srcset") or ""
+        srcset_url = ""
+        if srcset:
+          srcset_url = srcset.split(",")[0].strip().split(" ")[0].strip()
+        image_url = (
+            img_tag.get("data-src")
+            or img_tag.get("data-lazy-src")
+            or img_tag.get("data-original")
+            or srcset_url
+            or img_tag.get("src")
+            or ""
+        ).strip()
+        if image_url.startswith("data:"):
+          image_url = ""
+        if image_url.startswith("//"):
+          image_url = "https:" + image_url
+        elif image_url.startswith("/"):
+          image_url = f"https://{domain}{image_url}"
+
       if not any(r["Sursă / Link"] == target_url for r in results):
         results.append({
             "Magazin": store_name,
             "Sursă / Link": target_url,
             "Produs": title[:95] + ("..." if len(title) > 95 else ""),
             "Preț": price,
+            "Imagine": image_url,
         })
 
     return results
