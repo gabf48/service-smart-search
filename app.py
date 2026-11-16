@@ -18,6 +18,7 @@ if "last_query" not in st.session_state:
   st.session_state.last_query = ""
 
 raw_data = st.session_state.search_results
+# BUG INTRODUS: S-a omis pasarea lui st.session_state.last_query ca al doilea argument!
 cleaned_data = (
     [item for item in raw_data if not is_irrelevant_product(item["Produs"])]
     if raw_data

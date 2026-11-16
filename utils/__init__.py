@@ -1,3 +1,10 @@
-from .filters import is_irrelevant_product, parse_price_for_sorting
+from .tags import classify_category, get_product_tag
+from .filters import is_irrelevant_product
 from .formatting import highlight_search_terms
-from .tags import get_product_tag
+
+__all__ = [
+    "classify_category", 
+    "get_product_tag", 
+    "is_irrelevant_product", 
+    "highlight_search_terms"
+]
