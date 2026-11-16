@@ -24,41 +24,71 @@ def load_stores():
   ]
 
 
+async def _run_store_scrape(store_name, scrape_coro):
+  try:
+    results = await scrape_coro
+    if not isinstance(results, list):
+      return store_name, []
+    return store_name, results
+  except Exception as e:
+    print(f"Eroare la {store_name}: {e}")
+    return store_name, []
+
+
+def get_search_task_specs(part_number: str, client: httpx.AsyncClient):
+  specs = []
+
+  try:
+    importlib.reload(piese_laptop)
+    specs.append(("Piese-Laptop", piese_laptop.scrape(client, part_number)))
+  except Exception as e:
+    print(f"Eroare la piese_laptop: {e}")
+
+  try:
+    importlib.reload(emag)
+    specs.append(("eMAG", emag.scrape(client, part_number)))
+  except Exception as e:
+    print(f"Eroare la emag: {e}")
+
+  try:
+    importlib.reload(powerlaptop)
+    specs.append(("Powerlaptop", powerlaptop.scrape(client, part_number)))
+  except Exception as e:
+    print(f"Eroare la powerlaptop: {e}")
+
+  try:
+    importlib.reload(onlaptop)
+    specs.append(("OnLaptop", onlaptop.scrape(client, part_number)))
+  except Exception as e:
+    print(f"Eroare la onlaptop: {e}")
+
+  return specs
+
+
+def process_search_results(all_results, part_number: str):
+  filtered_results = []
+  for item in all_results:
+    title = item.get("Produs", "")
+
+    # 1. Dacă produsul este irelevant (telefon, tabletă, casnic, etc.), îl tăiem din start
+    if is_irrelevant_product(title, part_number):
+      continue
+
+    # 2. Suprascriem categoria global pe baza titlului, asigurând consecvența între magazine
+    item["Categorie"] = classify_category(title)
+    item["Preț"] = normalize_price_display(item.get("Preț", "N/A"))
+
+    filtered_results.append(item)
+  return filtered_results
+
+
 async def search_parts(part_number: str):
   async with httpx.AsyncClient() as client:
-    tasks = []
-
-    # 1. Scraper Piese-Laptop
-    try:
-      importlib.reload(piese_laptop)
-      tasks.append(piese_laptop.scrape(client, part_number))
-    except Exception as e:
-      print(f"Eroare la piese_laptop: {e}")
-
-    # 2. Scraper eMAG
-    try:
-      importlib.reload(emag)
-      tasks.append(emag.scrape(client, part_number))
-    except Exception as e:
-      print(f"Eroare la emag: {e}")
-
-    # 3. Scraper Powerlaptop
-    try:
-      importlib.reload(powerlaptop)
-      tasks.append(powerlaptop.scrape(client, part_number))
-    except Exception as e:
-      print(f"Eroare la powerlaptop: {e}")
-
-    # 4. Scraper OnLaptop
-    try:
-      importlib.reload(onlaptop)
-      tasks.append(onlaptop.scrape(client, part_number))
-    except Exception as e:
-      print(f"Eroare la onlaptop: {e}")
-
-    if not tasks:
+    specs = get_search_task_specs(part_number, client)
+    if not specs:
       return []
 
+    tasks = [coro for _, coro in specs]
     responses = await asyncio.gather(*tasks)
 
     all_results = []
@@ -66,18 +96,4 @@ async def search_parts(part_number: str):
       all_results.extend(store_res)
 
     # 🛡️ FILTRARE GLOBALĂ & CLASIFICARE GLOBALĂ UNITARĂ
-    filtered_results = []
-    for item in all_results:
-      title = item.get("Produs", "")
-
-      # 1. Dacă produsul este irelevant (telefon, tabletă, casnic, etc.), îl tăiem din start
-      if is_irrelevant_product(title, part_number):
-        continue
-
-      # 2. Suprascriem categoria global pe baza titlului, asigurând consecvența între magazine
-      item["Categorie"] = classify_category(title)
-      item["Preț"] = normalize_price_display(item.get("Preț", "N/A"))
-
-      filtered_results.append(item)
-
-    return filtered_results
+    return process_search_results(all_results, part_number)
