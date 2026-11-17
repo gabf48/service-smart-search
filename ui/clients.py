@@ -7,6 +7,7 @@ import pandas as pd
 import streamlit as st
 
 import database as db
+from utils import format_money
 
 
 def _badge(name, color):
@@ -348,6 +349,139 @@ def _render_offers_tab(client):
                 st.rerun()
 
 
+# --- Financiar -------------------------------------------------------------
+
+
+def _render_financial_tab(client):
+  st.markdown(
+      "Înregistrează banii primiți de la client și cheltuielile făcute pentru "
+      "repararea lui. Profitul se calculează automat: **Încasat − Cheltuit**."
+  )
+
+  summary = db.get_client_financial_summary(client["id"])
+  profit = summary["profit"]
+  col1, col2, col3 = st.columns(3)
+  with col1:
+    st.metric("💵 Încasat", format_money(summary["total_income"]))
+  with col2:
+    st.metric("💸 Cheltuit", format_money(summary["total_expense"]))
+  with col3:
+    st.metric("📈 Profit", format_money(profit))
+
+  color = "#3fb950" if profit >= 0 else "#f85149"
+  st.markdown(
+      f'<span style="color:{color};font-size:0.82rem;font-weight:600;">'
+      f"{summary['transaction_count']} tranzacție/tranzacții înregistrate"
+      "</span>",
+      unsafe_allow_html=True,
+  )
+
+  st.markdown("---")
+  st.subheader("➕ Tranzacție nouă")
+  with st.form(f"add_transaction_{client['id']}"):
+    type_col, category_col = st.columns(2)
+    with type_col:
+      tx_type = st.selectbox("Tip", list(db.TRANSACTION_TYPES))
+    with category_col:
+      category = st.selectbox("Categorie", list(db.TRANSACTION_CATEGORIES))
+    amount_col, desc_col = st.columns([1, 3])
+    with amount_col:
+      amount = st.number_input(
+          "Sumă (Lei)", min_value=0.01, value=1.0, step=10.0, format="%.2f"
+      )
+    with desc_col:
+      description = st.text_input(
+          "Descriere",
+          placeholder="ex. Tastatură HP 250 G7 — plătită furnizor",
+      )
+    add = st.form_submit_button("💾 Adaugă tranzacția", use_container_width=True)
+  if add:
+    transaction_id = db.add_transaction(
+        client["id"],
+        tx_type,
+        amount,
+        category=category,
+        description=description,
+    )
+    if transaction_id is None:
+      st.warning("Introdu o sumă pozitivă pentru tranzacție.")
+    else:
+      st.success("Tranzacția a fost adăugată în istoric.")
+      st.rerun()
+
+  st.markdown("---")
+  st.subheader("🧾 Tranzacții")
+  transactions = db.get_client_transactions(client["id"])
+  if not transactions:
+    st.info("Nu există tranzacții înregistrate pentru acest client.")
+    return
+
+  for tx in transactions:
+    is_income = tx["type"] == "Încasare"
+    icon = "➕" if is_income else "➖"
+    tx_color = "#3fb950" if is_income else "#f85149"
+    with st.container(border=True):
+      st.markdown(
+          f"{icon} **{html.escape(tx['type'])}** · "
+          f"<span style='color:{tx_color};font-weight:700;'>"
+          f"{format_money(tx['amount'])}</span> · `{html.escape(tx['category'])}`",
+          unsafe_allow_html=True,
+      )
+      details = tx["created_at"]
+      if tx["description"]:
+        details += f" · {html.escape(tx['description'])}"
+      st.caption(details)
+
+      with st.expander("✏️ Editează tranzacția", expanded=False):
+        type_index = (
+            db.TRANSACTION_TYPES.index(tx["type"])
+            if tx["type"] in db.TRANSACTION_TYPES
+            else 0
+        )
+        category_index = (
+            db.TRANSACTION_CATEGORIES.index(tx["category"])
+            if tx["category"] in db.TRANSACTION_CATEGORIES
+            else 0
+        )
+        with st.form(f"edit_transaction_{tx['id']}"):
+          e_type = st.selectbox(
+              "Tip", list(db.TRANSACTION_TYPES), index=type_index,
+              key=f"edit_tx_type_{tx['id']}",
+          )
+          e_category = st.selectbox(
+              "Categorie", list(db.TRANSACTION_CATEGORIES), index=category_index,
+              key=f"edit_tx_category_{tx['id']}",
+          )
+          e_amount = st.number_input(
+              "Sumă (Lei)",
+              min_value=0.01,
+              value=float(tx["amount"]),
+              step=10.0,
+              format="%.2f",
+              key=f"edit_tx_amount_{tx['id']}",
+          )
+          e_description = st.text_input(
+              "Descriere", value=tx["description"] or "",
+              key=f"edit_tx_description_{tx['id']}",
+          )
+          save = st.form_submit_button("💾 Salvează", use_container_width=True)
+        if save:
+          db.update_transaction(
+              tx["id"],
+              type=e_type,
+              amount=e_amount,
+              category=e_category,
+              description=e_description,
+          )
+          st.success("Tranzacția a fost actualizată.")
+          st.rerun()
+        if st.checkbox("Șterge tranzacția", key=f"confirm_del_tx_{tx['id']}"):
+          if st.button("Confirmă ștergerea", key=f"del_tx_{tx['id']}"):
+            db.delete_transaction(tx["id"])
+            st.success("Tranzacția a fost ștearsă.")
+            st.rerun()
+
+
 # --- Istoric ---------------------------------------------------------------
 
 
@@ -397,7 +531,10 @@ def _render_client_workspace(client_id):
   st.caption(f"ID #{client['id']} · Telefon: {client['phone']}")
 
   tabs = st.tabs(
-      ["✏️ Editare", "📱 Dispozitive", "🔩 Piese/Oferte", "📷 Poze", "🕘 Istoric"]
+      [
+          "✏️ Editare", "📱 Dispozitive", "🔩 Piese/Oferte",
+          "💰 Financiar", "📷 Poze", "🕘 Istoric",
+      ]
   )
   with tabs[0]:
     _render_edit_client(client)
@@ -406,8 +543,10 @@ def _render_client_workspace(client_id):
   with tabs[2]:
     _render_offers_tab(client)
   with tabs[3]:
-    _render_photos_tab(client)
+    _render_financial_tab(client)
   with tabs[4]:
+    _render_photos_tab(client)
+  with tabs[5]:
     _render_history_tab(client)
 
 
@@ -448,6 +587,9 @@ def _render_client_list():
           "Status": c["status_name"] or "Fără status",
           "Nr. telefon": c["phone"],
           "Dispozitive": c["devices"] or "—",
+          "Încasat": round(c["total_income"], 2),
+          "Cheltuit": round(c["total_expense"], 2),
+          "Profit": round(c["profit"], 2),
           "Creat": c["created_at"],
           "Ultimul update": c["updated_at"],
       }
@@ -455,10 +597,25 @@ def _render_client_list():
   ]
   df = pd.DataFrame(table_data, index=[c["id"] for c in clients])
 
+  def _profit_style(value):
+    if value > 0:
+      return "color: #3fb950; font-weight: 700"
+    if value < 0:
+      return "color: #f85149; font-weight: 700"
+    return ""
+
+  # Styler se folosește doar pentru culori; formatarea numerelor e în column_config.
+  styled_df = df.style.map(_profit_style, subset=["Profit"])
+
   event = st.dataframe(
-      df,
+      styled_df,
       hide_index=True,
-      use_container_width=True,
+      width="stretch",
+      column_config={
+          "Încasat": st.column_config.NumberColumn("Încasat", format="%.2f Lei"),
+          "Cheltuit": st.column_config.NumberColumn("Cheltuit", format="%.2f Lei"),
+          "Profit": st.column_config.NumberColumn("Profit", format="%.2f Lei"),
+      },
       selection_mode="single-row",
       on_select="rerun",
       key="clients_table",

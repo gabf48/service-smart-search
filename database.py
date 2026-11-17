@@ -34,6 +34,9 @@ DEFAULT_PART_STATUSES = [
     ("Anulată", "#f85149", 4),
 ]
 
+TRANSACTION_TYPES = ("Încasare", "Cheltuială")
+TRANSACTION_CATEGORIES = ("Piese", "Manoperă", "Transport", "Altele")
+
 FIELD_LABELS = {
     "name": "Nume",
     "phone": "Telefon",
@@ -163,6 +166,20 @@ def init_db():
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS client_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            type TEXT NOT NULL,
+            amount REAL NOT NULL,
+            category TEXT NOT NULL DEFAULT 'Piese',
+            description TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        )
+        """
+    )
 
     # Migrare pentru baze create înainte de adăugarea dispozitivelor multiple.
     photo_columns = {
@@ -200,6 +217,10 @@ def init_db():
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_offers_client ON device_offers(client_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_transactions_client "
+        "ON client_transactions(client_id)"
     )
 
     count = conn.execute("SELECT COUNT(*) FROM statuses").fetchone()[0]
@@ -418,9 +439,20 @@ def list_clients(search="", status_names=None):
              s.id AS status_id, s.name AS status_name, s.color AS status_color,
              (SELECT COUNT(*) FROM client_photos p WHERE p.client_id = c.id) AS photo_count,
              (SELECT GROUP_CONCAT(d.model, ', ') FROM devices d WHERE d.client_id = c.id) AS devices,
-             (SELECT COUNT(*) FROM devices d WHERE d.client_id = c.id) AS device_count
+             (SELECT COUNT(*) FROM devices d WHERE d.client_id = c.id) AS device_count,
+             COALESCE(fin.total_income, 0) AS total_income,
+             COALESCE(fin.total_expense, 0) AS total_expense,
+             COALESCE(fin.profit, 0) AS profit
       FROM clients c
       LEFT JOIN statuses s ON s.id = c.status_id
+      LEFT JOIN (
+          SELECT client_id,
+                 SUM(CASE WHEN type = 'Încasare' THEN amount ELSE 0 END) AS total_income,
+                 SUM(CASE WHEN type = 'Cheltuială' THEN amount ELSE 0 END) AS total_expense,
+                 SUM(CASE WHEN type = 'Încasare' THEN amount ELSE -amount END) AS profit
+          FROM client_transactions
+          GROUP BY client_id
+      ) fin ON fin.client_id = c.id
       WHERE 1 = 1
   """
   params = []
@@ -789,3 +821,170 @@ def delete_offer(offer_id):
       return
     conn.execute("DELETE FROM device_offers WHERE id = ?", (offer_id,))
     _log(conn, old["client_id"], "Ofertă ștearsă", old["product_name"])
+
+
+# --- Financiar per client ---------------------------------------------------
+
+
+def _clean_transaction_type(value):
+  label = str(value or "").strip()
+  return label if label in TRANSACTION_TYPES else TRANSACTION_TYPES[0]
+
+
+def _clean_transaction_category(value):
+  label = str(value or "").strip()
+  return label if label in TRANSACTION_CATEGORIES else TRANSACTION_CATEGORIES[-1]
+
+
+def _clean_transaction_amount(value):
+  try:
+    amount = float(value)
+  except (TypeError, ValueError):
+    return None
+  if amount <= 0:
+    return None
+  return round(amount, 2)
+
+
+def _transaction_log_details(tx_type, amount, category, description):
+  details = f"{tx_type} {amount:.2f} Lei · {category}"
+  if description:
+    details += f" · {description}"
+  return details
+
+
+def add_transaction(client_id, tx_type, amount, category="Piese", description=""):
+  """Adaugă o încasare sau o cheltuială în evidența financiară a clientului."""
+  clean_amount = _clean_transaction_amount(amount)
+  if clean_amount is None:
+    return None
+  clean_type = _clean_transaction_type(tx_type)
+  clean_category = _clean_transaction_category(category)
+  clean_description = (description or "").strip()
+  with get_connection() as conn:
+    if not conn.execute("SELECT 1 FROM clients WHERE id = ?", (client_id,)).fetchone():
+      return None
+    cursor = conn.execute(
+        """
+        INSERT INTO client_transactions
+            (client_id, type, amount, category, description)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (client_id, clean_type, clean_amount, clean_category, clean_description),
+    )
+    transaction_id = cursor.lastrowid
+    _log(
+        conn,
+        client_id,
+        "Tranzacție adăugată",
+        _transaction_log_details(
+            clean_type, clean_amount, clean_category, clean_description
+        ),
+    )
+    return transaction_id
+
+
+def get_client_transactions(client_id):
+  with get_connection() as conn:
+    rows = conn.execute(
+        "SELECT * FROM client_transactions WHERE client_id = ? ORDER BY id DESC",
+        (client_id,),
+    ).fetchall()
+  return [dict(row) for row in rows]
+
+
+def get_transaction(transaction_id):
+  with get_connection() as conn:
+    row = conn.execute(
+        "SELECT * FROM client_transactions WHERE id = ?", (transaction_id,)
+    ).fetchone()
+  return dict(row) if row else None
+
+
+def get_client_financial_summary(client_id):
+  """Total încasări, cheltuieli și profit pentru un client."""
+  with get_connection() as conn:
+    row = conn.execute(
+        """
+        SELECT COALESCE(SUM(CASE WHEN type = 'Încasare' THEN amount ELSE 0 END), 0)
+                   AS total_income,
+               COALESCE(SUM(CASE WHEN type = 'Cheltuială' THEN amount ELSE 0 END), 0)
+                   AS total_expense,
+               COALESCE(SUM(CASE WHEN type = 'Încasare' THEN amount ELSE -amount END), 0)
+                   AS profit,
+               COUNT(*) AS transaction_count
+        FROM client_transactions WHERE client_id = ?
+        """,
+        (client_id,),
+    ).fetchone()
+  return dict(row)
+
+
+def update_transaction(transaction_id, **fields):
+  allowed = {"type", "amount", "category", "description"}
+  updates = {k: v for k, v in fields.items() if k in allowed}
+  if not updates:
+    return
+  with get_connection() as conn:
+    old = conn.execute(
+        "SELECT * FROM client_transactions WHERE id = ?", (transaction_id,)
+    ).fetchone()
+    if not old:
+      return
+
+    changes = []
+    changed_values = []
+    for key, value in updates.items():
+      if key == "type":
+        value = _clean_transaction_type(value)
+      elif key == "amount":
+        value = _clean_transaction_amount(value)
+        if value is None:
+          continue
+      elif key == "category":
+        value = _clean_transaction_category(value)
+      else:
+        value = (value or "").strip()
+      if old[key] == value:
+        continue
+      if key == "amount":
+        changes.append(
+            f"Sumă: {old[key]:.2f} Lei → {value:.2f} Lei"
+        )
+      else:
+        changes.append(f"{key}: {old[key] or '—'} → {value or '—'}")
+      changed_values.append((key, value))
+    if not changes:
+      return
+
+    assignments = [f"{key} = ?" for key, _ in changed_values]
+    assignments.append("updated_at = datetime('now', 'localtime')")
+    values = [value for _, value in changed_values] + [transaction_id]
+    conn.execute(
+        f"UPDATE client_transactions SET {', '.join(assignments)} WHERE id = ?",
+        values,
+    )
+    _log(conn, old["client_id"], "Tranzacție actualizată", "; ".join(changes))
+
+
+def delete_transaction(transaction_id):
+  with get_connection() as conn:
+    old = conn.execute(
+        "SELECT client_id, type, amount, category, description "
+        "FROM client_transactions WHERE id = ?",
+        (transaction_id,),
+    ).fetchone()
+    if not old:
+      return
+    conn.execute("DELETE FROM client_transactions WHERE id = ?", (transaction_id,))
+    _log(
+        conn,
+        old["client_id"],
+        "Tranzacție ștearsă",
+        _transaction_log_details(
+            old["type"],
+            old["amount"],
+            old["category"],
+            old["description"],
+        ),
+    )
