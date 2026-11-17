@@ -21,7 +21,27 @@ def classify_category(title: str) -> str:
   ):
     return "Baterie"
 
-  # 4. Display-uri / Ecrane
+  # 4. Laptopuri întregi — se verifică ÎNAINTE de Stocare/RAM, altfel
+  # specificațiile precum "256GB SSD" ar face un laptop complet să fie
+  # clasificat greșit la "Stocare".
+  part_markers = [
+      "baterie", "battery", "acumulator", "incarcator", "încărcător",
+      "charger", "adapter", "alimentator", "tastatura", "tastatură",
+      "keyboard", "cooler", "ventilator", "fan ", "mufa", "mufă",
+      "balamale", "hinge", "carcasa", "carcasă", "pasta", "surub", "șurub",
+  ]
+  # Titlurile care încep cu "Laptop" sunt aproape sigur laptopuri complete
+  # (chiar dacă menționează ecran/display sau SSD în specificații).
+  if t.startswith("laptop") and not any(kw in t for kw in part_markers):
+    return "Laptopuri"
+
+  # Laptopuri menționate în interiorul titlului (fără piese/accesorii)
+  if "laptop" in t and not any(kw in t for kw in part_markers + [
+      "piese", "display", "ecran", "screen",
+  ]):
+    return "Laptopuri"
+
+  # 5. Display-uri / Ecrane
   if any(kw in t for kw in ["display", "ecran", "matrice", "lcd", "led slim"]):
     return "Display"
 

@@ -70,7 +70,7 @@ if data is not None:
     st.markdown("---")
 
     if filtered_data:
-      render_results(filtered_data)
+      render_results(filtered_data, sort_option)
     else:
       st.warning(
           "⚠️ Niciun produs nu corespunde filtrelor de preț, magazin și"
