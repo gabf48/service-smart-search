@@ -19,6 +19,15 @@ def _badge(name, color):
   )
 
 
+def _start_search_for_device(device_id, query):
+  """Trece pe modulul Căutare cu deviceul ca țintă și query pre-completat."""
+  st.session_state["search_target_device_id"] = device_id
+  st.session_state["search_prefill"] = query
+  st.session_state["search_input_token"] = st.session_state.get("search_input_token", 0) + 1
+  st.session_state["pending_app_module"] = "🔍 Căutare piese"
+  st.rerun()
+
+
 # --- Client nou ------------------------------------------------------------
 
 
@@ -116,11 +125,21 @@ def _render_devices_tab(client):
   st.markdown("Un client poate avea unul sau mai multe dispozitive.")
 
   devices = db.get_client_devices(client["id"])
+  offer_counts = db.get_offer_counts_by_device(client["id"])
   if not devices:
     st.info("Acest client nu are încă niciun dispozitiv adăugat.")
 
   for device in devices:
-    with st.expander(f"📱 {device['model']}", expanded=False):
+    saved = offer_counts.get(device["id"], 0)
+    suffix = f" · 🔩 {saved} {'ofertă' if saved == 1 else 'oferte'}" if saved else ""
+    with st.expander(f"📱 {device['model']}{suffix}", expanded=False):
+      if st.button(
+          "🔍 Caută piese pentru acest device",
+          key=f"search_for_dev_{device['id']}",
+          use_container_width=True,
+      ):
+        _start_search_for_device(device["id"], device["model"])
+
       with st.form(f"edit_device_{device['id']}"):
         model = st.text_input("Model / device", value=device["model"])
         serial = st.text_input("Număr de serie / IMEI", value=device["serial_number"] or "")
@@ -207,6 +226,82 @@ def _render_photos_tab(client):
         st.rerun()
 
 
+# --- Oferte de piese -------------------------------------------------------
+
+
+def _render_offers_tab(client):
+  st.markdown(
+      "Piesele găsite în căutare și salvate aici sunt legate de dispozitivul "
+      "clientului. Schimbările de status se salvează în istoric."
+  )
+  offers = db.get_client_offers(client["id"])
+  if not offers:
+    st.info(
+        "Nu există încă oferte salvate. Pornește o căutare dintr-un device sau"
+        " folosește butonul „Salvează la client” din rezultatele căutării."
+    )
+    return
+
+  status_colors = {s["name"]: s["color"] for s in db.get_part_statuses()}
+  statuses = list(status_colors.keys()) or ["De comandat"]
+
+  grouped = {}
+  for offer in offers:
+    grouped.setdefault(offer["device_id"], []).append(offer)
+
+  for device_id, items in grouped.items():
+    device_label = items[0]["device_model"] or f"Device #{device_id}"
+    with st.expander(f"📱 {device_label} · 🔩 {len(items)} oferte", expanded=True):
+      for offer in items:
+        with st.container(border=True):
+          title = html.escape(str(offer["product_name"] or "Piesă"))
+          link = str(offer["link"] or "").strip()
+          if link.startswith(("http://", "https://")):
+            title = f'<a href="{html.escape(link, quote=True)}" target="_blank">{title}</a>'
+          st.markdown(
+              f"**{title}**  "
+              + _badge(offer["status"], status_colors.get(offer["status"])),
+              unsafe_allow_html=True,
+          )
+          col1, col2 = st.columns([2, 2])
+          with col1:
+            st.caption(f"💰 {offer['price'] or '—'} · 🏬 {offer['store'] or '—'}")
+          with col2:
+            st.caption(
+                f"Cantitate: {offer['quantity']} · Salvată: {offer['created_at']}"
+            )
+          if offer["part_number"]:
+            st.caption(f"Căutare: `{offer['part_number']}`")
+          if offer["notes"]:
+            st.caption(f"📝 {offer['notes']}")
+
+          with st.expander("✏️ Editează oferta", expanded=False):
+            with st.form(f"edit_offer_{offer['id']}"):
+              idx = statuses.index(offer["status"]) if offer["status"] in statuses else 0
+              new_status = st.selectbox("Status piesă", statuses, index=idx)
+              new_qty = st.number_input(
+                  "Cantitate", min_value=1, value=int(offer["quantity"] or 1), step=1
+              )
+              new_notes = st.text_area(
+                  "Notițe", value=offer["notes"] or "", height=70
+              )
+              save = st.form_submit_button("💾 Salvează", use_container_width=True)
+            if save:
+              db.update_offer(
+                  offer["id"],
+                  status=new_status,
+                  quantity=new_qty,
+                  notes=new_notes,
+              )
+              st.success("Oferta a fost actualizată.")
+              st.rerun()
+            if st.checkbox("Șterge oferta", key=f"confirm_del_offer_{offer['id']}"):
+              if st.button("Confirmă ștergerea", key=f"del_offer_{offer['id']}"):
+                db.delete_offer(offer["id"])
+                st.success("Oferta a fost ștearsă.")
+                st.rerun()
+
+
 # --- Istoric ---------------------------------------------------------------
 
 
@@ -256,15 +351,17 @@ def _render_client_workspace(client_id):
   st.caption(f"ID #{client['id']} · Telefon: {client['phone']}")
 
   tabs = st.tabs(
-      ["✏️ Editare", "📱 Dispozitive", "📷 Poze", "🕘 Istoric"]
+      ["✏️ Editare", "📱 Dispozitive", "🔩 Piese/Oferte", "📷 Poze", "🕘 Istoric"]
   )
   with tabs[0]:
     _render_edit_client(client)
   with tabs[1]:
     _render_devices_tab(client)
   with tabs[2]:
-    _render_photos_tab(client)
+    _render_offers_tab(client)
   with tabs[3]:
+    _render_photos_tab(client)
+  with tabs[4]:
     _render_history_tab(client)
 
 

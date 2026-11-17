@@ -291,13 +291,18 @@ async def _run_search_with_progress(query: str):
 
 
 def render_search_form():
+  # Când căutarea e pornită dintr-un device, câmpul e pre-completat o dată.
+  prefill = st.session_state.pop("search_prefill", "")
+  input_token = st.session_state.get("search_input_token", 0)
   with st.form(key="search_form"):
     col1, col2 = st.columns([5, 1])
     with col1:
       part_input = st.text_input(
           "Introdu Part Number sau produs:",
+          value=prefill,
           placeholder="ex: G502, FX607VU, Memorie Corsair...",
           label_visibility="collapsed",
+          key=f"search_q_{input_token}",
       )
     with col2:
       search_button = st.form_submit_button(

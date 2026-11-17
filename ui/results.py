@@ -3,12 +3,97 @@ import re
 import textwrap
 
 import streamlit as st
+
+import database as db
 from ui.sidebar import TAG_ICONS
 from utils import get_product_tag
 from utils.filters import parse_price_for_sorting
 
 
-def _render_card(item, current_query, is_cheapest):
+@st.dialog("➕ Salvează oferta la client")
+def _save_offer_dialog(item, query):
+  db.init_db()
+  clients = db.list_clients()
+  if not clients:
+    st.warning(
+        "Nu există clienți în baza de date. Adaugă mai întâi un client din"
+        " modulul „Clienți & Service”."
+    )
+    return
+
+  target_id = st.session_state.get("search_target_device_id")
+  target = db.get_device_owner(target_id) if target_id else None
+
+  client_ids = [c["id"] for c in clients]
+  client_by_id = {c["id"]: c for c in clients}
+  client_index = 0
+  if target:
+    for idx, cid in enumerate(client_ids):
+      if cid == target["client_id"]:
+        client_index = idx
+        break
+  client_id = st.selectbox(
+      "Client",
+      client_ids,
+      index=client_index,
+      format_func=lambda cid: (
+          f"{client_by_id[cid]['name']} · {client_by_id[cid]['phone']}"
+      ),
+      key="offer_client_select",
+  )
+
+  devices = db.get_client_devices(client_id)
+  if not devices:
+    st.warning(
+        "Clientul selectat nu are încă niciun dispozitiv. Adaugă unul din fișa clientului."
+    )
+    return
+
+  device_ids = [d["id"] for d in devices]
+  device_by_id = {d["id"]: d for d in devices}
+  device_index = 0
+  if target and target["device_id"] in device_ids:
+    device_index = device_ids.index(target["device_id"])
+  device_id = st.selectbox(
+      "Dispozitiv",
+      device_ids,
+      index=device_index,
+      format_func=lambda did: (
+          f"📱 {device_by_id[did]['model']}"
+          + (f" (S/N {device_by_id[did]['serial_number']})" if device_by_id[did]["serial_number"] else "")
+      ),
+      key="offer_device_select",
+  )
+
+  statuses = [s["name"] for s in db.get_part_statuses()]
+  col1, col2 = st.columns([2, 1])
+  with col1:
+    status = st.selectbox("Status piesă", statuses, key="offer_status_select")
+  with col2:
+    quantity = st.number_input("Cantitate", min_value=1, value=1, step=1, key="offer_qty_input")
+  notes = st.text_area("Notițe", height=70, key="offer_notes_input")
+
+  st.markdown("---")
+  st.markdown(f"**{html.escape(str(item.get('Produs', '')))}**")
+  st.caption(
+      f"{html.escape(str(item.get('Magazin', '')))} · "
+      f"{html.escape(str(item.get('Preț', '')))}"
+  )
+
+  if st.button("💾 Salvează oferta", type="primary", use_container_width=True):
+    db.add_offer(
+        device_id,
+        item,
+        part_number=query,
+        status=status,
+        quantity=quantity,
+        notes=notes,
+    )
+    st.success("Oferta a fost salvată în fișa clientului.")
+    st.rerun()
+
+
+def _render_card(item, current_query, is_cheapest, card_key):
   raw_title = item.get("Produs", "")
   tag_text = item.get("Categorie") or get_product_tag(raw_title)
 
@@ -91,6 +176,13 @@ def _render_card(item, current_query, is_cheapest):
   else:
     st.markdown(rendered_html, unsafe_allow_html=True)
 
+  if st.button(
+      "➕ Salvează la client",
+      key=f"save_offer_{card_key}",
+      use_container_width=True,
+  ):
+    _save_offer_dialog(item, current_query)
+
 
 def render_results(filtered_data, sort_option="Fără sortare"):
   # Preluăm query-ul curent din session_state pentru a ști ce să evidențiem
@@ -120,6 +212,7 @@ def render_results(filtered_data, sort_option="Fără sortare"):
     return (0, -value if desc else value)
 
   ordered_categories = sorted(groups.keys(), key=_group_sort_key)
+  card_seq = 0
 
   st.caption(
       "📦 Rezultate grupate pe categorii — cel mai ieftin produs apare primul;"
@@ -161,7 +254,8 @@ def render_results(filtered_data, sort_option="Fără sortare"):
     cheapest_item = items[cheapest_idx]
     rest_items = items[:cheapest_idx] + items[cheapest_idx + 1:]
 
-    _render_card(cheapest_item, current_query, is_cheapest=True)
+    card_seq += 1
+    _render_card(cheapest_item, current_query, is_cheapest=True, card_key=card_seq)
 
     # Restul produselor din categorie — ascunse by default sub o săgeată
     if rest_items:
@@ -170,8 +264,10 @@ def render_results(filtered_data, sort_option="Fără sortare"):
       with st.expander(label, expanded=False):
         for item in rest_items:
           price_val = parse_price_for_sorting(item.get("Preț"))
+          card_seq += 1
           _render_card(
               item,
               current_query,
               is_cheapest=price_val != float("inf") and price_val == best_price,
+              card_key=card_seq,
           )

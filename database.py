@@ -26,6 +26,14 @@ DEFAULT_STATUSES = [
     ("Anulat", "#f85149", 6),
 ]
 
+DEFAULT_PART_STATUSES = [
+    ("De comandat", "#d29922", 0),
+    ("Comandată", "#1f6feb", 1),
+    ("Primată", "#a371f7", 2),
+    ("Montată", "#238636", 3),
+    ("Anulată", "#f85149", 4),
+]
+
 FIELD_LABELS = {
     "name": "Nume",
     "phone": "Telefon",
@@ -120,6 +128,37 @@ def init_db():
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS part_statuses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            color TEXT NOT NULL DEFAULT '#1f6feb',
+            sort_order INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS device_offers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+            client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            product_name TEXT NOT NULL,
+            price TEXT NOT NULL DEFAULT '',
+            store TEXT NOT NULL DEFAULT '',
+            link TEXT NOT NULL DEFAULT '',
+            image_url TEXT NOT NULL DEFAULT '',
+            category TEXT NOT NULL DEFAULT '',
+            part_number TEXT NOT NULL DEFAULT '',
+            quantity INTEGER NOT NULL DEFAULT 1,
+            notes TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'De comandat',
+            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        )
+        """
+    )
 
     # Migrare pentru baze create înainte de adăugarea dispozitivelor multiple.
     photo_columns = {
@@ -142,12 +181,25 @@ def init_db():
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_history_client ON client_history(client_id)"
     )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_offers_device ON device_offers(device_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_offers_client ON device_offers(client_id)"
+    )
 
     count = conn.execute("SELECT COUNT(*) FROM statuses").fetchone()[0]
     if count == 0:
       conn.executemany(
           "INSERT INTO statuses (name, color, sort_order) VALUES (?, ?, ?)",
           DEFAULT_STATUSES,
+      )
+
+    part_count = conn.execute("SELECT COUNT(*) FROM part_statuses").fetchone()[0]
+    if part_count == 0:
+      conn.executemany(
+          "INSERT INTO part_statuses (name, color, sort_order) VALUES (?, ?, ?)",
+          DEFAULT_PART_STATUSES,
       )
 
     # Mută device-ul vechi (un singur text) în tabela de dispozitive.
@@ -505,3 +557,172 @@ def delete_client(client_id):
     full_path = photo_full_path(photo["file_path"])
     if os.path.exists(full_path):
       os.remove(full_path)
+
+
+# --- Oferte de piese (corelare căutare ↔ device) ---------------------------
+
+
+OFFER_FIELD_LABELS = {
+    "product_name": "Piesă",
+    "price": "Preț",
+    "store": "Magazin",
+    "link": "Link",
+    "quantity": "Cantitate",
+    "notes": "Notițe",
+    "status": "Status piesă",
+}
+
+
+def get_part_statuses():
+  with get_connection() as conn:
+    rows = conn.execute(
+        "SELECT name, color FROM part_statuses ORDER BY sort_order, id"
+    ).fetchall()
+  return [dict(row) for row in rows]
+
+
+def get_device_owner(device_id):
+  with get_connection() as conn:
+    row = conn.execute(
+        """
+        SELECT d.id AS device_id, d.model, d.serial_number,
+               d.client_id, c.name AS client_name
+        FROM devices d JOIN clients c ON c.id = d.client_id
+        WHERE d.id = ?
+        """,
+        (device_id,),
+    ).fetchone()
+  return dict(row) if row else None
+
+
+def get_device_offers(device_id):
+  with get_connection() as conn:
+    rows = conn.execute(
+        "SELECT * FROM device_offers WHERE device_id = ? ORDER BY id DESC",
+        (device_id,),
+    ).fetchall()
+  return [dict(row) for row in rows]
+
+
+def get_client_offers(client_id):
+  with get_connection() as conn:
+    rows = conn.execute(
+        """
+        SELECT o.*, d.model AS device_model
+        FROM device_offers o LEFT JOIN devices d ON d.id = o.device_id
+        WHERE o.client_id = ? ORDER BY o.device_id, o.id DESC
+        """,
+        (client_id,),
+    ).fetchall()
+  return [dict(row) for row in rows]
+
+
+def get_offer_counts_by_device(client_id):
+  with get_connection() as conn:
+    rows = conn.execute(
+        "SELECT device_id, COUNT(*) AS count FROM device_offers "
+        "WHERE client_id = ? GROUP BY device_id",
+        (client_id,),
+    ).fetchall()
+  return {row["device_id"]: row["count"] for row in rows}
+
+
+def get_offer(offer_id):
+  with get_connection() as conn:
+    row = conn.execute(
+        "SELECT * FROM device_offers WHERE id = ?", (offer_id,)
+    ).fetchone()
+  return dict(row) if row else None
+
+
+def add_offer(device_id, product, part_number="", status=None, quantity=1, notes=""):
+  """Salvează o ofertă din rezultatele căutării, legată de un device."""
+  with get_connection() as conn:
+    device = conn.execute(
+        "SELECT d.model, d.client_id FROM devices d WHERE d.id = ?", (device_id,)
+    ).fetchone()
+    if not device:
+      return None
+    if not status:
+      first = conn.execute(
+          "SELECT name FROM part_statuses ORDER BY sort_order, id LIMIT 1"
+      ).fetchone()
+      status = first["name"] if first else DEFAULT_PART_STATUSES[0][0]
+    cursor = conn.execute(
+        """
+        INSERT INTO device_offers
+            (device_id, client_id, product_name, price, store, link,
+             image_url, category, part_number, quantity, notes, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            device_id,
+            device["client_id"],
+            str(product.get("Produs") or "").strip(),
+            str(product.get("Preț") or "").strip(),
+            str(product.get("Magazin") or "").strip(),
+            str(product.get("Sursă / Link") or "").strip(),
+            str(product.get("Imagine") or "").strip(),
+            str(product.get("Categorie") or "").strip(),
+            str(part_number or "").strip(),
+            max(1, int(quantity or 1)),
+            (notes or "").strip(),
+            status,
+        ),
+    )
+    offer_id = cursor.lastrowid
+    _log(
+        conn,
+        device["client_id"],
+        "Ofertă salvată",
+        f"{str(product.get('Produs') or '')[:70]} · {device['model']} · {status}",
+    )
+    return offer_id
+
+
+def update_offer(offer_id, **fields):
+  allowed = {"product_name", "price", "store", "link", "quantity", "notes", "status"}
+  updates = {k: v for k, v in fields.items() if k in allowed}
+  if not updates:
+    return
+  with get_connection() as conn:
+    old = conn.execute(
+        "SELECT * FROM device_offers WHERE id = ?", (offer_id,)
+    ).fetchone()
+    if not old:
+      return
+
+    changes = []
+    changed_values = []
+    for key, value in updates.items():
+      if key == "quantity":
+        value = max(1, int(value or 1))
+      elif isinstance(value, str):
+        value = value.strip()
+      if old[key] == value:
+        continue
+      changes.append(
+          f"{OFFER_FIELD_LABELS.get(key, key)}: {old[key] or '—'} → {value or '—'}"
+      )
+      changed_values.append((key, value))
+    if not changes:
+      return
+
+    assignments = [f"{key} = ?" for key, _ in changed_values]
+    assignments.append("updated_at = datetime('now', 'localtime')")
+    values = [value for _, value in changed_values] + [offer_id]
+    conn.execute(
+        f"UPDATE device_offers SET {', '.join(assignments)} WHERE id = ?", values
+    )
+    _log(conn, old["client_id"], "Ofertă actualizată", "; ".join(changes))
+
+
+def delete_offer(offer_id):
+  with get_connection() as conn:
+    old = conn.execute(
+        "SELECT client_id, product_name FROM device_offers WHERE id = ?", (offer_id,)
+    ).fetchone()
+    if not old:
+      return
+    conn.execute("DELETE FROM device_offers WHERE id = ?", (offer_id,))
+    _log(conn, old["client_id"], "Ofertă ștearsă", old["product_name"])

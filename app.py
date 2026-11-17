@@ -1,3 +1,5 @@
+import html
+
 from config import setup_page
 from filtering import filter_and_sort_data
 from scraper import load_stores
@@ -12,10 +14,16 @@ from utils.tags import get_product_tag
 
 setup_page()
 
+# Schimbarea modului pornită dintr-un callback e aplicată înainte de radio.
+pending_module = st.session_state.pop("pending_app_module", None)
+if pending_module:
+  st.session_state["app_module"] = pending_module
+
 app_module = st.sidebar.radio(
     "Modul aplicație",
     ["🔍 Căutare piese", "🧾 Clienți & Service"],
     horizontal=True,
+    key="app_module",
 )
 
 if app_module == "🧾 Clienți & Service":
@@ -23,6 +31,30 @@ if app_module == "🧾 Clienți & Service":
 
   render_clients_page()
   st.stop()
+
+# Ținta de căutare poate veni dintr-un device al unui client.
+target_device = None
+target_device_id = st.session_state.get("search_target_device_id")
+if target_device_id:
+  import database as db
+
+  db.init_db()
+  target_device = db.get_device_owner(target_device_id)
+  if not target_device:
+    st.session_state.pop("search_target_device_id", None)
+
+if target_device:
+  info_col, clear_col = st.columns([6, 1])
+  with info_col:
+    serial = f" (S/N: {html.escape(target_device['serial_number'])})" if target_device["serial_number"] else ""
+    st.info(
+        f"🔗 Cauți piese pentru **{html.escape(target_device['client_name'])}** · "
+        f"📱 {html.escape(target_device['model'])}{serial}",
+    )
+  with clear_col:
+    if st.button("✖️ Renunță", use_container_width=True):
+      st.session_state.pop("search_target_device_id", None)
+      st.rerun()
 
 if "search_results" not in st.session_state:
   st.session_state.search_results = None
