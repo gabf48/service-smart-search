@@ -78,49 +78,6 @@ def _add_client_dialog():
     st.rerun()
 
 
-# --- Editare client --------------------------------------------------------
-
-
-def _render_edit_client(client):
-  statuses = db.get_statuses()
-  status_names = [s["name"] for s in statuses]
-  name_to_id = {s["name"]: s["id"] for s in statuses}
-  current_status = client["status_name"] or ""
-
-  with st.form(f"edit_client_{client['id']}"):
-    col1, col2 = st.columns(2)
-    with col1:
-      name = st.text_input("Nume client", value=client["name"])
-      phone = st.text_input("Nr. telefon", value=client["phone"])
-    with col2:
-      index = status_names.index(current_status) if current_status in status_names else 0
-      status_name = st.selectbox("Status", status_names, index=index)
-      st.caption(f"Creat: {client['created_at']} · Actualizat: {client['updated_at']}")
-
-    problem = st.text_area("Problemă raportată", value=client["problem"] or "", height=90)
-    notes = st.text_area("Observații interne", value=client["notes"] or "", height=70)
-    save = st.form_submit_button("💾 Salvează modificările", use_container_width=True)
-
-  if save:
-    db.update_client(
-        client["id"],
-        name=name,
-        phone=phone,
-        problem=problem,
-        notes=notes,
-        status_id=name_to_id.get(status_name),
-    )
-    st.success("Modificările au fost salvate în istoric.")
-    st.rerun()
-
-  st.markdown("---")
-  if st.checkbox("Confirmă ștergerea clientului", key=f"confirm_del_{client['id']}"):
-    if st.button("🗑️ Șterge clientul definitiv", key=f"del_client_{client['id']}"):
-      db.delete_client(client["id"])
-      st.success("Clientul și toate datele lui au fost șterse.")
-      st.rerun()
-
-
 # --- Dispozitive -----------------------------------------------------------
 
 
@@ -515,40 +472,140 @@ def _render_history_tab(client):
         st.caption(entry["details"])
 
 
-# --- Workspace client selectat ---------------------------------------------
+# --- Detalii client (dialog read / edit) -----------------------------------
 
 
-def _render_client_workspace(client_id):
+def _on_client_row_selected():
+  """Callback la selectarea unui rând: deschide dialogul și curăță selecția."""
+  rows = (
+      st.session_state.get("clients_table", {})
+      .get("selection", {})
+      .get("rows", [])
+  )
+  if not rows:
+    return
+  ids = st.session_state.get("clients_table_ids", [])
+  row_index = rows[0]
+  if 0 <= row_index < len(ids):
+    st.session_state["open_client_id"] = ids[row_index]
+    st.session_state["client_detail_edit_mode"] = False
+  # Golim selecția ca dialogul să nu se redeschidă după închidere.
+  st.session_state["clients_table"] = {
+      "selection": {"rows": [], "columns": [], "cells": []}
+  }
+
+
+def _on_client_dialog_dismiss():
+  """La închiderea dialogului eliberăm selecția de client."""
+  st.session_state["open_client_id"] = None
+  st.session_state["client_detail_edit_mode"] = False
+  st.session_state["clients_table"] = {
+      "selection": {"rows": [], "columns": [], "cells": []}
+  }
+
+
+@st.dialog("📋 Detalii client", width="large", on_dismiss=_on_client_dialog_dismiss)
+def _client_detail_dialog(client_id):
   client = db.get_client(client_id)
   if not client:
     st.warning("Clientul selectat nu mai există.")
+    st.session_state["open_client_id"] = None
     return
 
-  st.markdown("---")
-  st.markdown(
-      f"## {html.escape(client['name'])} "
-      + _badge(client["status_name"], client["status_color"]),
-      unsafe_allow_html=True,
-  )
-  st.caption(f"ID #{client['id']} · Telefon: {client['phone']}")
+  edit_mode = st.session_state.get("client_detail_edit_mode", False)
+
+  header_col, action_col = st.columns([8, 1], vertical_alignment="center")
+  with header_col:
+    st.markdown(
+        f"### {html.escape(client['name'])} "
+        + _badge(client["status_name"], client["status_color"]),
+        unsafe_allow_html=True,
+    )
+  with action_col:
+    if edit_mode:
+      if st.button("↩️ Read mode", key="client_detail_cancel"):
+        st.session_state["client_detail_edit_mode"] = False
+    else:
+      if st.button("✏️ Editează", key="client_detail_edit"):
+        st.session_state["client_detail_edit_mode"] = True
+
+  feedback = st.session_state.pop("client_detail_feedback", None)
+  if feedback:
+    st.success(feedback)
+
+  if edit_mode:
+    statuses = db.get_statuses()
+    status_names = [s["name"] for s in statuses]
+    name_to_id = {s["name"]: s["id"] for s in statuses}
+    current_status = client["status_name"] or ""
+    index = status_names.index(current_status) if current_status in status_names else 0
+
+    with st.form("client_detail_edit_form"):
+      col1, col2 = st.columns(2)
+      with col1:
+        name = st.text_input("Nume client", value=client["name"])
+        phone = st.text_input("Nr. telefon", value=client["phone"])
+      with col2:
+        status_name = st.selectbox("Status", status_names, index=index)
+        st.caption(f"Creat: {client['created_at']} · Actualizat: {client['updated_at']}")
+      problem = st.text_area(
+          "Problemă raportată", value=client["problem"] or "", height=80
+      )
+      notes = st.text_area(
+          "Observații interne", value=client["notes"] or "", height=60
+      )
+      with st.container(horizontal=True, horizontal_alignment="right"):
+        save = st.form_submit_button("💾 Salvează")
+
+    if save:
+      db.update_client(
+          client_id,
+          name=name,
+          phone=phone,
+          problem=problem,
+          notes=notes,
+          status_id=name_to_id.get(status_name),
+      )
+      st.session_state["client_detail_edit_mode"] = False
+      st.session_state["client_detail_feedback"] = "Modificările au fost salvate în istoric."
+      st.rerun()
+
+    with st.expander("🗑️ Șterge clientul", expanded=False):
+      if st.checkbox("Confirmă ștergerea clientului", key=f"confirm_del_{client_id}"):
+        if st.button("Șterge definitiv", key=f"del_client_{client_id}"):
+          db.delete_client(client_id)
+          st.session_state["open_client_id"] = None
+          st.session_state["client_detail_edit_mode"] = False
+          st.rerun()
+  else:
+    with st.container(border=True):
+      col1, col2 = st.columns(2)
+      with col1:
+        st.markdown(f"**Telefon:** {html.escape(client['phone'] or '—')}")
+        st.markdown(
+            f"**Status:** {html.escape(client['status_name'] or 'Fără status')}"
+        )
+      with col2:
+        st.caption(f"Creat: {client['created_at']}")
+        st.caption(f"Actualizat: {client['updated_at']}")
+      st.markdown(f"**Problemă raportată:** {html.escape(client['problem'] or '—')}")
+      st.markdown(f"**Observații interne:** {html.escape(client['notes'] or '—')}")
 
   tabs = st.tabs(
       [
-          "✏️ Editare", "📱 Dispozitive", "🔩 Piese/Oferte",
-          "💰 Financiar", "📷 Poze", "🕘 Istoric",
+          "📱 Dispozitive", "🔩 Piese/Oferte", "💰 Financiar",
+          "📷 Poze", "🕘 Istoric",
       ]
   )
   with tabs[0]:
-    _render_edit_client(client)
-  with tabs[1]:
     _render_devices_tab(client)
-  with tabs[2]:
+  with tabs[1]:
     _render_offers_tab(client)
-  with tabs[3]:
+  with tabs[2]:
     _render_financial_tab(client)
-  with tabs[4]:
+  with tabs[3]:
     _render_photos_tab(client)
-  with tabs[5]:
+  with tabs[4]:
     _render_history_tab(client)
 
 
@@ -653,7 +710,10 @@ def _render_client_list():
   # Styler se folosește doar pentru culori; formatarea numerelor e în column_config.
   styled_df = df.style.map(_profit_style, subset=["Profit"])
 
-  event = st.dataframe(
+  # Ținem maparea rând -> id pentru callback-ul care deschide dialogul.
+  st.session_state["clients_table_ids"] = [c["id"] for c in clients]
+
+  st.dataframe(
       styled_df,
       hide_index=True,
       width="stretch",
@@ -663,13 +723,9 @@ def _render_client_list():
           "Profit": st.column_config.NumberColumn("Profit", format="%.2f Lei"),
       },
       selection_mode="single-row",
-      on_select="rerun",
+      on_select=_on_client_row_selected,
       key="clients_table",
   )
-  selected_rows = event.selection.rows
-  if selected_rows:
-    selected_id = int(df.index[selected_rows[0]])
-    _render_client_workspace(selected_id)
 
 
 # --- Statusuri -------------------------------------------------------------
@@ -781,3 +837,7 @@ def render_clients_page():
     _render_client_list()
   with statuses_tab:
     _render_statuses()
+
+  open_client_id = st.session_state.get("open_client_id")
+  if open_client_id:
+    _client_detail_dialog(open_client_id)
