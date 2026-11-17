@@ -320,4 +320,11 @@ def render_search_form():
           _run_search_with_progress(st.session_state.last_query)
       )
     st.session_state.search_results = results
+    # Resetăm filtrele vechi (magazine/categorii debifate într-o sesiune
+    # anterioară sau înainte de navigarea în alt modul), altfel noile
+    # rezultate pot rămâne complet ascunse și par că „nu apar".
+    # Nu modificăm direct cheile aici: sidebarul a instanțiat deja
+    # checkbox-urile în această rundă, iar Streamlit ar refuza scrierea.
+    # Amânăm resetul la începutul rundei următoare, în app.py.
+    st.session_state["_pending_filter_reset"] = True
     st.rerun()

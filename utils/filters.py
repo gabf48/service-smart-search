@@ -71,6 +71,13 @@ def is_irrelevant_product(title, query=None):
   t = title.lower()
 
   irrelevant_keywords = [
+      # Anvelope / pneuri (nu sunt piese de service IT)
+      "anvelopa",
+      "anvelopă",
+      "anvelope",
+      "pneu",
+      "cauciuc auto",
+      "cauciuc tractor",
       "iphone",
       "smartphone",
       "telefon mobil",

@@ -26,6 +26,11 @@ app_module = st.sidebar.radio(
     key="app_module",
 )
 
+# Când intrăm la Căutare, eliberăm selecția de client ca modalul din
+# „Clienți & Service" să nu se redeschidă la o revenire ulterioară.
+if app_module == "🔍 Căutare piese":
+  st.session_state.pop("open_client_id", None)
+
 if app_module == "🧾 Clienți & Service":
   from ui.clients import render_clients_page
 
@@ -77,6 +82,16 @@ cleaned_data = (
     if raw_data
     else raw_data
 )
+
+# După o căutare nouă, repunem toate filtrele pe „bifat", înainte ca
+# sidebarul să instanțieze checkbox-urile. Altfel, filtrele rămase debifate
+# dintr-o sesiune anterioară pot ascunde complet noile rezultate (pă parând
+# că „nu apar"). Trebuie făcut aici, nu în render_search_form, pentru că
+# aceea rulează după ce widget-urile au fost deja create.
+if st.session_state.pop("_pending_filter_reset", False):
+  for key in list(st.session_state.keys()):
+    if key.startswith("store_") or key.startswith("tag_"):
+      st.session_state[key] = True
 
 stores = load_stores()
 store_checkboxes, tag_checkboxes = render_sidebar(stores, cleaned_data)

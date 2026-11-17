@@ -51,6 +51,36 @@ def classify_category(title: str) -> str:
   ]):
     return "Laptopuri"
 
+  # 4b. PC complete / Workstation / Desktop — înainte de Procesoare și de
+  #     Stocare/RAM. Un sistem complet are adesea „Core i7"/„Ryzen" și SSD/RAM
+  #     în specificații, deci trebuie recunoscut ca întreg înainte de piese.
+  pc_markers = ["desktop", "workstation", "calculator", "barebone", "mini pc"]
+  if re.search(r"\bpc\b", t) or any(kw in t for kw in pc_markers):
+    if not any(kw in t for kw in [
+        "carcasa", "carcasă", "sursa ", "sursă ", "cooler", "ventilator",
+        "tastatura", "tastatură", "monitor", "display", "ecran", "mufa",
+        "mufă", "piese", "baterie", "acumulator", "cartus", "cartuș",
+        "toner", "cerneala", "cerneală", "laptop",
+    ]):
+      return "PC / Workstation"
+
+  # 4c. Procesoare (CPU) — înainte de Stocare/RAM, altfel specificațiile
+  #     precum "16GB RAM, 512GB SSD" le-ar clasifica greșit. Excludem
+  #     accesoriile (coolere, pastă termică) care menționează procesorul.
+  cpu_markers = [
+      "procesor", "processor", "ryzen", "threadripper", "xeon",
+      "core i", "pentium", "celeron", "athlon", "epyc", "alder lake",
+      "rocket lake", "comet lake",
+  ]
+  cpu_accessories = [
+      "laptop", "cooler", "ventilator", "heatsink", "pasta",
+      "termoconductoare", "suport", "soclu", "socket", "lipici",
+  ]
+  if (re.search(r"\bcpu\b", t) or any(kw in t for kw in cpu_markers)) and not any(
+      kw in t for kw in cpu_accessories
+  ):
+    return "Procesoare"
+
   # 5. Display-uri / Ecrane
   if any(kw in t for kw in ["display", "ecran", "matrice", "lcd", "led slim"]):
     return "Display"

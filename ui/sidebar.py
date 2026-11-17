@@ -4,6 +4,8 @@ from utils import get_product_tag
 # Cheile sunt exact valorile întoarse de classify_category (fără emoji).
 # Emoji-ul se folosește doar la afișarea etichetei în sidebar.
 TAG_ICONS = {
+    "PC / Workstation": "🖥️",
+    "Procesoare": "⚙️",
     "Laptopuri": "💻",
     "Gaming / Console": "🎮",
     "Consumabile Imprimante": "🖨️",

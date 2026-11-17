@@ -262,11 +262,12 @@ def render_results(filtered_data, sort_option="Fără sortare"):
     card_seq += 1
     _render_card(cheapest_item, current_query, is_cheapest=True, card_key=card_seq)
 
-    # Restul produselor din categorie — ascunse by default sub o săgeată
+    # Restul produselor din categorie — colapsate by default; doar cel mai
+    # ieftin produs apare la prima vedere.
     if rest_items:
       rest_word = "produs" if len(rest_items) == 1 else "produse"
       label = f"🔽 Vezi restul ({len(rest_items)} {rest_word}) din {category}"
-      with st.expander(label, expanded=True):
+      with st.expander(label, expanded=False):
         for item in rest_items:
           price_val = parse_price_for_sorting(item.get("Preț"))
           card_seq += 1
