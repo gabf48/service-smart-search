@@ -216,8 +216,8 @@ def render_results(filtered_data, sort_option="Fără sortare"):
   card_seq = 0
 
   st.caption(
-      "📦 Rezultate grupate pe categorii — cel mai ieftin produs apare primul;"
-      " folosește săgeata pentru restul produselor din categorie."
+      "📦 Rezultate grupate pe categorii — cel mai ieftin produs apare primul,"
+      " urmat de restul ofertelor din categorie."
   )
 
   for category in ordered_categories:
@@ -262,7 +262,7 @@ def render_results(filtered_data, sort_option="Fără sortare"):
     if rest_items:
       rest_word = "produs" if len(rest_items) == 1 else "produse"
       label = f"🔽 Vezi restul ({len(rest_items)} {rest_word}) din {category}"
-      with st.expander(label, expanded=False):
+      with st.expander(label, expanded=True):
         for item in rest_items:
           price_val = parse_price_for_sorting(item.get("Preț"))
           card_seq += 1

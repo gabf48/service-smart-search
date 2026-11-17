@@ -2,9 +2,14 @@ import asyncio
 import importlib
 import json
 import os
+import re
 from scrapers import emag, onlaptop, piese_laptop, powerlaptop
 import httpx
-from utils.filters import is_irrelevant_product, normalize_price_display
+from utils.filters import (
+    is_irrelevant_product,
+    normalize_price_display,
+    parse_price_for_sorting,
+)
 from utils.tags import classify_category  # <--- Importul clasificatorului global de categorii
 
 
@@ -67,6 +72,9 @@ def get_search_task_specs(part_number: str, client: httpx.AsyncClient):
 
 def process_search_results(all_results, part_number: str):
   filtered_results = []
+  # Un magazin poate returna același produs de mai multe ori (paginare / reluări).
+  # Între magazine păstrăm toate ofertele, ca să rămână comparația de preț.
+  seen = {}
   for item in all_results:
     title = item.get("Produs", "")
 
@@ -78,7 +86,20 @@ def process_search_results(all_results, part_number: str):
     item["Categorie"] = classify_category(title)
     item["Preț"] = normalize_price_display(item.get("Preț", "N/A"))
 
-    filtered_results.append(item)
+    key = (
+        str(item.get("Magazin", "")).strip().lower(),
+        re.sub(r"\s+", " ", str(title).strip().lower()),
+    )
+    if key in seen:
+      idx = seen[key]
+      old_price = parse_price_for_sorting(filtered_results[idx].get("Preț"))
+      new_price = parse_price_for_sorting(item.get("Preț"))
+      if new_price < old_price:
+        filtered_results[idx] = item
+    else:
+      seen[key] = len(filtered_results)
+      filtered_results.append(item)
+
   return filtered_results
 
 
