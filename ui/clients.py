@@ -555,46 +555,36 @@ def _render_client_workspace(client_id):
 
 
 def _render_client_list():
-  statuses = db.get_statuses()
-  status_names = [s["name"] for s in statuses]
-  counts = db.get_status_counts()
+  status_names = [s["name"] for s in db.get_statuses()]
 
-  metric_cols = st.columns(min(len(counts), 6) or 1)
-  for idx, (status_name, count) in enumerate(counts.items()):
-    with metric_cols[idx % len(metric_cols)]:
-      st.metric(status_name, count)
-
-  st.markdown("---")
-  col1, col2 = st.columns([2, 2])
-  with col1:
+  # Toate filtrele într-un singur rând, ca tabelul să rămână sus.
+  search_col, status_col, sum_col, min_col, max_col, reset_col = st.columns(
+      [3, 2, 1.5, 1, 1, 0.7]
+  )
+  with search_col:
     search = st.text_input(
-        "🔎 Caută client (nume / telefon / device)", key="clients_search"
+        "🔎 Caută client", placeholder="nume / telefon / device",
+        key="clients_search",
     )
-  with col2:
+  with status_col:
     selected_statuses = st.multiselect(
-        "Filtrează după status", status_names, key="clients_status_filter"
+        "Status", status_names, key="clients_status_filter"
     )
-
-  filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([2, 1, 1, 1])
-  with filter_col1:
+  with sum_col:
     amount_label = st.selectbox(
-        "Filtrează după sumă",
-        ["Profit", "Încasat", "Cheltuit"],
-        key="clients_amount_field",
+        "Sumă", ["Profit", "Încasat", "Cheltuit"], key="clients_amount_field"
     )
-  with filter_col2:
+  with min_col:
     min_amount = st.number_input(
-        "Min (Lei)", value=None, step=50.0, placeholder="—",
-        key="clients_min_amount",
+        "Min", value=None, step=50.0, placeholder="—", key="clients_min_amount"
     )
-  with filter_col3:
+  with max_col:
     max_amount = st.number_input(
-        "Max (Lei)", value=None, step=50.0, placeholder="—",
-        key="clients_max_amount",
+        "Max", value=None, step=50.0, placeholder="—", key="clients_max_amount"
     )
-  with filter_col4:
+  with reset_col:
     st.write("")
-    if st.button("🧹 Resetează", key="reset_client_filters"):
+    if st.button("🧹", key="reset_client_filters", help="Resetează toate filtrele"):
       for key in (
           "clients_search", "clients_status_filter", "clients_amount_field",
           "clients_min_amount", "clients_max_amount",
@@ -615,16 +605,22 @@ def _render_client_list():
 
   total_income = sum(c["total_income"] for c in clients)
   total_expense = sum(c["total_expense"] for c in clients)
-  total_profit = total_income - total_expense
   total_cols = st.columns(3)
   with total_cols[0]:
-    st.metric("💵 Total încasat", format_money(total_income))
+    st.metric("💵 încasat", format_money(total_income))
   with total_cols[1]:
-    st.metric("💸 Total cheltuit", format_money(total_expense))
+    st.metric("💸 cheltuit", format_money(total_expense))
   with total_cols[2]:
-    st.metric("📈 Profit total", format_money(total_profit))
+    st.metric("📈 Profit", format_money(total_income - total_expense))
 
-  st.caption(f"{len(clients)} client/clienti găsiți · selectează un rând pentru detalii")
+  status_counts = {}
+  for client in clients:
+    label = client["status_name"] or "Fără status"
+    status_counts[label] = status_counts.get(label, 0) + 1
+  status_text = " · ".join(
+      f"{name}: {count}" for name, count in status_counts.items()
+  ) or "—"
+  st.caption(f"{len(clients)} clienți · {status_text}")
 
   if not clients:
     st.info("Nu există clienți care să corespundă filtrelor.")
@@ -723,10 +719,10 @@ def _render_statuses():
 
 def render_clients_page():
   db.init_db()
-  st.title("🧾 Clienți & Service")
-  st.markdown("Evidența clienților, a dispozitivelor și a intervențiilor de reparare.")
-
-  with st.container(horizontal=True, horizontal_alignment="right"):
+  title_col, button_col = st.columns([8, 1], vertical_alignment="center")
+  with title_col:
+    st.subheader("🧾 Clienți & Service")
+  with button_col:
     if st.button("➕ Client nou", icon=":material/person_add:"):
       _add_client_dialog()
 
