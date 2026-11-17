@@ -46,10 +46,11 @@ if target_device_id:
 if target_device:
   info_col, clear_col = st.columns([6, 1])
   with info_col:
-    serial = f" (S/N: {html.escape(target_device['serial_number'])})" if target_device["serial_number"] else ""
+    serial = f" · S/N: {html.escape(target_device['serial_number'])}" if target_device["serial_number"] else ""
+    mtm = f" · MTM: `{html.escape(target_device['mtm'])}`" if target_device.get("mtm") else ""
     st.info(
         f"🔗 Cauți piese pentru **{html.escape(target_device['client_name'])}** · "
-        f"📱 {html.escape(target_device['model'])}{serial}",
+        f"📱 {html.escape(target_device['model'])}{mtm}{serial}",
     )
   with clear_col:
     if st.button("✖️ Renunță", use_container_width=True):

@@ -100,6 +100,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
             model TEXT NOT NULL,
+            mtm TEXT NOT NULL DEFAULT '',
             serial_number TEXT NOT NULL DEFAULT '',
             notes TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
@@ -168,6 +169,13 @@ def init_db():
       conn.execute(
           "ALTER TABLE client_photos ADD COLUMN device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL"
       )
+
+    # Migrare pentru baze create înainte de adăugarea câmpului MTM.
+    device_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(devices)")
+    }
+    if "mtm" not in device_columns:
+      conn.execute("ALTER TABLE devices ADD COLUMN mtm TEXT NOT NULL DEFAULT ''")
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_clients_status ON clients(status_id)"
@@ -393,10 +401,11 @@ def list_clients(search="", status_names=None):
         AND (LOWER(c.name) LIKE ? OR LOWER(c.phone) LIKE ?
              OR LOWER(c.device) LIKE ?
              OR EXISTS (SELECT 1 FROM devices d
-                        WHERE d.client_id = c.id AND LOWER(d.model) LIKE ?))
+                        WHERE d.client_id = c.id
+                           AND (LOWER(d.model) LIKE ? OR LOWER(d.mtm) LIKE ?)))
     """
     like = f"%{search.lower()}%"
-    params.extend([like, like, like, like])
+    params.extend([like, like, like, like, like])
   if status_names:
     placeholders = ", ".join("?" for _ in status_names)
     query += f" AND s.name IN ({placeholders})"
@@ -427,29 +436,42 @@ def get_client(client_id):
 def get_client_devices(client_id):
   with get_connection() as conn:
     rows = conn.execute(
-        "SELECT id, model, serial_number, notes, created_at "
+        "SELECT id, model, mtm, serial_number, notes, created_at "
         "FROM devices WHERE client_id = ? ORDER BY id",
         (client_id,),
     ).fetchall()
   return [dict(row) for row in rows]
 
 
-def add_device(client_id, model, serial_number="", notes=""):
+def add_device(client_id, model, mtm="", serial_number="", notes=""):
   clean_model = (model or "").strip()
   if not clean_model:
     return None
+  clean_mtm = (mtm or "").strip()
   with get_connection() as conn:
     cursor = conn.execute(
-        "INSERT INTO devices (client_id, model, serial_number, notes) VALUES (?, ?, ?, ?)",
-        (client_id, clean_model, (serial_number or "").strip(), (notes or "").strip()),
+        "INSERT INTO devices (client_id, model, mtm, serial_number, notes) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (
+            client_id,
+            clean_model,
+            clean_mtm,
+            (serial_number or "").strip(),
+            (notes or "").strip(),
+        ),
     )
     device_id = cursor.lastrowid
-    _log(conn, client_id, "Dispozitiv adăugat", clean_model)
+    _log(
+        conn,
+        client_id,
+        "Dispozitiv adăugat",
+        clean_model + (f" · MTM: {clean_mtm}" if clean_mtm else ""),
+    )
     return device_id
 
 
 def update_device(device_id, **fields):
-  allowed = {"model", "serial_number", "notes"}
+  allowed = {"model", "mtm", "serial_number", "notes"}
   updates = {k: v for k, v in fields.items() if k in allowed}
   if not updates:
     return
@@ -585,7 +607,7 @@ def get_device_owner(device_id):
   with get_connection() as conn:
     row = conn.execute(
         """
-        SELECT d.id AS device_id, d.model, d.serial_number,
+        SELECT d.id AS device_id, d.model, d.mtm, d.serial_number,
                d.client_id, c.name AS client_name
         FROM devices d JOIN clients c ON c.id = d.client_id
         WHERE d.id = ?

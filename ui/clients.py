@@ -132,7 +132,8 @@ def _render_devices_tab(client):
   for device in devices:
     saved = offer_counts.get(device["id"], 0)
     suffix = f" · 🔩 {saved} {'ofertă' if saved == 1 else 'oferte'}" if saved else ""
-    with st.expander(f"📱 {device['model']}{suffix}", expanded=False):
+    mtm_hint = f" · MTM: {device['mtm']}" if device.get("mtm") else ""
+    with st.expander(f"📱 {device['model']}{mtm_hint}{suffix}", expanded=False):
       if st.button(
           "🔍 Caută piese pentru acest device",
           key=f"search_for_dev_{device['id']}",
@@ -141,13 +142,18 @@ def _render_devices_tab(client):
         _start_search_for_device(device["id"], device["model"])
 
       with st.form(f"edit_device_{device['id']}"):
-        model = st.text_input("Model / device", value=device["model"])
-        serial = st.text_input("Număr de serie / IMEI", value=device["serial_number"] or "")
+        model = st.text_input("Model Name / model", value=device["model"])
+        mtm = st.text_input(
+            "MTM (Machine Type Model)",
+            value=device.get("mtm") or "",
+            placeholder="ex. 20R1000MRT",
+        )
+        serial = st.text_input("S/N (număr de serie)", value=device["serial_number"] or "")
         notes = st.text_area("Observații dispozitiv", value=device["notes"] or "", height=70)
         save = st.form_submit_button("💾 Salvează dispozitivul")
       if save:
         db.update_device(
-            device["id"], model=model, serial_number=serial, notes=notes
+            device["id"], model=model, mtm=mtm, serial_number=serial, notes=notes
         )
         st.success("Dispozitivul a fost actualizat.")
         st.rerun()
@@ -161,15 +167,18 @@ def _render_devices_tab(client):
   st.markdown("---")
   st.subheader("➕ Dispozitiv nou")
   with st.form(f"add_device_{client['id']}"):
-    model = st.text_input("Model / device *", placeholder="ex. Lenovo IdeaPad 3")
-    serial = st.text_input("Număr de serie / IMEI")
+    model = st.text_input("Model Name / model *", placeholder="ex. Lenovo IdeaPad 3")
+    mtm = st.text_input("MTM (Machine Type Model)", placeholder="ex. 20R1000MRT")
+    serial = st.text_input("S/N (număr de serie)")
     notes = st.text_area("Observații", height=60)
     add = st.form_submit_button("Adaugă dispozitiv", use_container_width=True)
   if add:
     if not (model or "").strip():
       st.warning("Introdu modelul dispozitivului.")
     else:
-      db.add_device(client["id"], model, serial, notes)
+      db.add_device(
+          client["id"], model, mtm=mtm, serial_number=serial, notes=notes
+      )
       st.success("Dispozitivul a fost adăugat.")
       st.rerun()
 
