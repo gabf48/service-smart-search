@@ -74,9 +74,17 @@ def classify_category(title: str) -> str:
   ]):
     return "Consumabile Imprimante"
 
-  # 11. Consumabile generale (pasta termica, suruburi etc.)
+  # 11. Accesorii gaming / console (joystick, thumbstick, controller etc.)
   if any(kw in t for kw in [
-      "pasta", "termoconductoare", "surub", "cablu flex",
+      "joystick", "thumbstick", "playstation", "ps4", "ps5", "xbox",
+      "nintendo", "gamepad", "controller", "maneta joc", "pad ps",
+  ]):
+    return "Gaming / Console"
+
+  # 12. Consumabile generale (pasta termica, adezivi, suruburi etc.)
+  if any(kw in t for kw in [
+      "pasta", "termoconductoare", "adeziv", "adezivi", "banda adeziva",
+      "bandă adezivă", "surub", "cablu flex",
   ]):
     return "Consumabile"
 
