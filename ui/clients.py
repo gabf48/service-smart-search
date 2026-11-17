@@ -3,6 +3,7 @@
 import html
 import os
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -682,16 +683,50 @@ def _render_statuses():
   if feedback:
     st.success(feedback)
 
-  if statuses:
-    badges = " ".join(
-        _badge(status["name"], status["color"])
-        + f"<span style='color:#8b949e;font-size:0.75rem;'>"
-        f"({counts.get(status['name'], 0)})</span>"
-        for status in statuses
-    )
-    st.markdown(badges, unsafe_allow_html=True)
-  else:
+  if not statuses:
     st.info("Nu există statusuri definite.")
+  else:
+    chart_col, badge_col = st.columns([1, 2], vertical_alignment="center")
+    with chart_col:
+      total = sum(counts.values())
+      if total:
+        chart_data = pd.DataFrame({
+            "Status": list(counts.keys()),
+            "Clienți": list(counts.values()),
+        })
+        colors = [
+            next(
+                (s["color"] for s in statuses if s["name"] == name),
+                "#8b949e",
+            )
+            for name in counts
+        ]
+        donut = (
+            alt.Chart(chart_data)
+            .mark_arc(innerRadius=55)
+            .encode(
+                theta=alt.Theta("Clienți:Q"),
+                color=alt.Color(
+                    "Status:N",
+                    scale=alt.Scale(domain=list(counts), range=colors),
+                    legend=None,
+                ),
+                tooltip=["Status:N", "Clienți:Q"],
+            )
+            .properties(height=150)
+        )
+        st.altair_chart(donut)
+        st.caption(f"{total} clienți în total")
+      else:
+        st.caption("Niciun client înregistrat")
+    with badge_col:
+      badges = " ".join(
+          _badge(status["name"], status["color"])
+          + f"<span style='color:#8b949e;font-size:0.75rem;'>"
+          f"({counts.get(status['name'], 0)})</span>"
+          for status in statuses
+      )
+      st.markdown(badges, unsafe_allow_html=True)
 
   with st.expander("➕ Adaugă status nou", expanded=False):
     with st.form("add_status_form"):
@@ -705,7 +740,8 @@ def _render_statuses():
         new_color = st.color_picker(
             "Culoare", value="#1f6feb", label_visibility="collapsed"
         )
-      add = st.form_submit_button("Adaugă status", use_container_width=True)
+      with st.container(horizontal=True, horizontal_alignment="right"):
+        add = st.form_submit_button("Adaugă status")
     if add:
       if not (new_name or "").strip():
         st.warning("Introdu un nume pentru status.")
@@ -722,12 +758,13 @@ def _render_statuses():
     else:
       by_name = {s["name"]: s for s in deletable}
       to_delete = st.selectbox("Status de șters", list(by_name), key="delete_status_name")
-      if st.button("Confirmă ștergerea", key="delete_status_confirm"):
-        if db.delete_status(by_name[to_delete]["id"]):
-          st.session_state["status_feedback"] = "Statusul a fost șters."
-          st.rerun()
-        else:
-          st.warning("Statusul este folosit de cel puțin un client.")
+      with st.container(horizontal=True, horizontal_alignment="right"):
+        if st.button("Confirmă ștergerea", key="delete_status_confirm"):
+          if db.delete_status(by_name[to_delete]["id"]):
+            st.session_state["status_feedback"] = "Statusul a fost șters."
+            st.rerun()
+          else:
+            st.warning("Statusul este folosit de cel puțin un client.")
 
 
 def render_clients_page():
