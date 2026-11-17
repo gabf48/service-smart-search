@@ -4,6 +4,14 @@ import re
 def parse_price_for_sorting(price_str):
   if not price_str or price_str == "N/A":
     return float("inf")
+  # OpenCart/eMAG pot scrie "1.289 00 Lei" (miimi + zecimi separate prin spațiu).
+  grouped = re.search(r"(\d{1,3}(?:[.\s]\d{3})+)[,\s]+(\d{2})(?!\d)", price_str)
+  if grouped:
+    try:
+      return float(re.sub(r"\D", "", grouped.group(1)) + "." + grouped.group(2))
+    except ValueError:
+      return float("inf")
+
   clean_str = re.sub(r"[^\d.,]", "", price_str)
   # Handle both "1.299,99" and "1,299.99" style separators.
   if "," in clean_str and "." in clean_str:
@@ -30,12 +38,17 @@ def normalize_price_display(price_str):
   raw_num = match.group(1)
   compact = re.sub(r"\s+", "", raw_num)
 
-  # eMAG sometimes formats prices like "849 99 Lei" (space before decimals).
-  if re.match(r"^\d+\d{2}$", compact) and "." not in compact and "," not in compact:
-    # Leave plain integers alone; space-decimal case handled by original string pattern below.
-    pass
+  # "1.289 00 Lei" / "1.289,99 Lei" -> 1289.00 / 1289.99
+  grouped = re.search(
+      r"(\d{1,3}(?:[.\s]\d{3})+)[,\s]+(\d{2})\s*(?:lei|ron)",
+      price_str,
+      re.IGNORECASE,
+  )
   space_decimal = re.search(r"(\d+)\s+(\d{2})\s*(?:lei|ron)", price_str, re.IGNORECASE)
-  if space_decimal and "." not in compact and "," not in compact:
+  if grouped:
+    thousands = re.sub(r"\D", "", grouped.group(1))
+    amount = float(f"{thousands}.{grouped.group(2)}")
+  elif space_decimal and "." not in compact and "," not in compact:
     amount = float(f"{space_decimal.group(1)}.{space_decimal.group(2)}")
   else:
     amount = parse_price_for_sorting(raw_num)
@@ -62,6 +75,11 @@ def is_irrelevant_product(title, query=None):
       "smartphone",
       "telefon mobil",
       "telefon",
+      # Nu sunt piese de laptop (dar rămân permise dacă exact asta se caută).
+      "baterie externa",
+      "baterie externă",
+      "powerbank",
+      "second hand",
       "tab",
       "camera spate",     # Scris cu litere mici și fără diacritice
       "cameră spate",     # Cu diacritice, pentru siguranță

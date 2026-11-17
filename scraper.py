@@ -3,8 +3,9 @@ import importlib
 import json
 import os
 import re
-from scrapers import emag, onlaptop, piese_laptop, powerlaptop
+
 import httpx
+
 from utils.filters import (
     is_irrelevant_product,
     normalize_price_display,
@@ -13,59 +14,81 @@ from utils.filters import (
 from utils.tags import classify_category  # <--- Importul clasificatorului global de categorii
 
 
-def load_stores():
+# Magazinele active sunt definite în websites.json. `module` e fișierul din
+# scrapers/ care știe să caute în magazinul respectiv.
+DEFAULT_STORES = [
+    {"name": "Powerlaptop", "domain": "powerlaptop.ro", "module": "powerlaptop", "enabled": True},
+    {"name": "eMAG", "domain": "emag.ro", "module": "emag", "enabled": True},
+    {"name": "Piese-Laptop", "domain": "piese-laptop.ro", "module": "piese_laptop", "enabled": True},
+    {"name": "OnLaptop", "domain": "onlaptop.ro", "module": "onlaptop", "enabled": True},
+    {"name": "PC Garage", "domain": "pcgarage.ro", "module": "pc_garage", "enabled": True},
+    {"name": "Interlink", "domain": "interlink.ro", "module": "interlink", "enabled": True},
+]
+
+
+def _module_from_name(name: str) -> str:
+  return re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", str(name).lower())).strip("_")
+
+
+def load_stores(enabled_only: bool = True):
+  """Citește magazinele din websites.json (cu fallback la lista implicită)."""
+  stores = DEFAULT_STORES
   if os.path.exists("websites.json"):
     try:
       with open("websites.json", "r", encoding="utf-8") as f:
         data = json.load(f)
-        return data.get("stores", [])
-    except Exception:
-      pass
-  return [
-      {"name": "Powerlaptop", "domain": "powerlaptop.ro"},
-      {"name": "eMAG", "domain": "emag.ro"},
-      {"name": "Piese-Laptop", "domain": "piese-laptop.ro"},
-      {"name": "OnLaptop", "domain": "onlaptop.ro"},
-  ]
+        loaded = data.get("stores")
+        if isinstance(loaded, list) and loaded:
+          stores = loaded
+    except Exception as e:
+      print(f"Eroare la citirea websites.json: {e}")
+
+  normalized = []
+  for store in stores:
+    if not isinstance(store, dict) or not store.get("name"):
+      continue
+    item = dict(store)
+    item.setdefault("enabled", True)
+    if not item.get("module"):
+      item["module"] = _module_from_name(item["name"])
+    normalized.append(item)
+
+  if enabled_only:
+    normalized = [store for store in normalized if store["enabled"]]
+  return normalized
 
 
-async def _run_store_scrape(store_name, scrape_coro):
-  try:
-    results = await scrape_coro
-    if not isinstance(results, list):
-      return store_name, []
-    return store_name, results
-  except Exception as e:
-    print(f"Eroare la {store_name}: {e}")
-    return store_name, []
+async def _run_store(scrape_fn, client, part_number: str, store_name: str):
+  """Rulează un scraper și forțează numele magazinului pe fiecare rezultat."""
+  results = await scrape_fn(client, part_number)
+  if not isinstance(results, list):
+    return []
+  for item in results:
+    if isinstance(item, dict):
+      item["Magazin"] = store_name
+  return results
 
 
 def get_search_task_specs(part_number: str, client: httpx.AsyncClient):
+  """Construiește sarcinile de căutare pentru toate magazinele active."""
   specs = []
+  seen_modules = set()
 
-  try:
-    importlib.reload(piese_laptop)
-    specs.append(("Piese-Laptop", piese_laptop.scrape(client, part_number)))
-  except Exception as e:
-    print(f"Eroare la piese_laptop: {e}")
+  for store in load_stores(enabled_only=True):
+    module_name = store["module"]
+    if module_name in seen_modules:
+      continue
+    seen_modules.add(module_name)
 
-  try:
-    importlib.reload(emag)
-    specs.append(("eMAG", emag.scrape(client, part_number)))
-  except Exception as e:
-    print(f"Eroare la emag: {e}")
-
-  try:
-    importlib.reload(powerlaptop)
-    specs.append(("Powerlaptop", powerlaptop.scrape(client, part_number)))
-  except Exception as e:
-    print(f"Eroare la powerlaptop: {e}")
-
-  try:
-    importlib.reload(onlaptop)
-    specs.append(("OnLaptop", onlaptop.scrape(client, part_number)))
-  except Exception as e:
-    print(f"Eroare la onlaptop: {e}")
+    try:
+      scraper_module = importlib.import_module(f"scrapers.{module_name}")
+      scrape_fn = getattr(scraper_module, "scrape")
+      specs.append((
+          store["name"],
+          _run_store(scrape_fn, client, part_number, store["name"]),
+      ))
+    except Exception as e:
+      print(f"Eroare la încărcarea scraperului {module_name}: {e}")
 
   return specs
 

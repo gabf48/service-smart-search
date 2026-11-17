@@ -1,8 +1,12 @@
 {
   "stores": [
-    {"name": "Powerlaptop", "domain": "powerlaptop.ro"},
-    {"name": "eMAG", "domain": "emag.ro"},
-    {"name": "Piese-Laptop", "domain": "piese-laptop.ro"},
-    {"name": "OnLaptop", "domain": "onlaptop.ro"}
+    {"name": "Powerlaptop", "domain": "powerlaptop.ro", "module": "powerlaptop", "enabled": true},
+    {"name": "eMAG", "domain": "emag.ro", "module": "emag", "enabled": true},
+    {"name": "Piese-Laptop", "domain": "piese-laptop.ro", "module": "piese_laptop", "enabled": true},
+    {"name": "OnLaptop", "domain": "onlaptop.ro", "module": "onlaptop", "enabled": true},
+    {"name": "PC Garage", "domain": "pcgarage.ro", "module": "pc_garage", "enabled": true},
+    {"name": "Interlink", "domain": "interlink.ro", "module": "interlink", "enabled": true},
+    {"name": "Alza", "domain": "alzashop.com", "module": "alza", "enabled": false, "note": "Cloudflare challenge (403) - activează doar dacă rețeaua ta trece de verificare"},
+    {"name": "MediaTek", "domain": "mediatek.ro", "module": "mediatek", "enabled": false, "note": "Site-ul nu răspunde din această rețea (ConnectError)"}
   ]
 }
