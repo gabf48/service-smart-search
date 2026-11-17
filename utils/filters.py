@@ -122,6 +122,14 @@ def is_irrelevant_product(title, query=None):
       "frigider",
       "congelator",
       "scaun",
+      # Șuruburi/consumabile de construcții sau tâmplărie (nu piese de laptop)
+      "dulgherie",
+      "autoforant",
+      "diblu",
+      "tija filetata",
+      "tijă filetată",
+      "ancora metalica",
+      "ancoră metalică",
   ]
 
   for kw in irrelevant_keywords:

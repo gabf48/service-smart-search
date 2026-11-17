@@ -15,8 +15,10 @@ def classify_category(title: str) -> str:
   if any(kw in t for kw in ["tastatura", "tastatură", "keyboard"]):
     return "Tastatură"
 
-  # 3. Baterii
-  if any(kw in t for kw in ["baterie", "acumulator", "battery"]):
+  # 3. Baterii (inclusiv titluri fără cuvântul "baterie", dar cu capacitate în mAh)
+  if any(kw in t for kw in ["baterie", "acumulator", "battery"]) or re.search(
+      r"\b\d{3,6}\s*mah\b", t
+  ):
     return "Baterie"
 
   # 4. Display-uri / Ecrane
@@ -43,8 +45,19 @@ def classify_category(title: str) -> str:
   if any(kw in t for kw in ["mufa", "mufă", "conector", "jack alimentare"]):
     return "Mufe & Conectori"
 
-  # 10. Consumabile
-  if any(kw in t for kw in ["pasta", "termoconductoare", "surub", "cablu flex"]):
+  # 10. Consumabile pentru imprimante (cartuse, toner, cerneala, maintenance box etc.)
+  if any(kw in t for kw in [
+      "cartus", "cartuș", "cartridge", "toner", "cerneala", "cerneală",
+      "inkjet", "ink-jet", "maintenance box", "waste ink", "ink pad",
+      "printhead", "print head", "cap de printare", "kit refill", "refill",
+      "hartie foto", "hârtie foto", "etichete",
+  ]):
+    return "Consumabile Imprimante"
+
+  # 11. Consumabile generale (pasta termica, suruburi etc.)
+  if any(kw in t for kw in [
+      "pasta", "termoconductoare", "surub", "cablu flex",
+  ]):
     return "Consumabile"
 
   # 11. Laptopuri întregi

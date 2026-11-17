@@ -5,7 +5,8 @@ from utils import get_product_tag
 # Emoji-ul se folosește doar la afișarea etichetei în sidebar.
 TAG_ICONS = {
     "Laptopuri": "💻",
-    "Consumabile": "🖨️",
+    "Consumabile Imprimante": "🖨️",
+    "Consumabile": "🧪",
     "Încărcătoare": "⚡",
     "Coolere": "❄️",
     "Mufe & Conectori": "🔌",

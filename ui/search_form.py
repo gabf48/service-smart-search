@@ -121,6 +121,13 @@ PANEL_CSS = """
     box-shadow: 0 0 8px #3fb950aa;
   }
   .scan-chip.done .count { color: #3fb950; font-weight: 700; }
+  .scan-chip.empty { border-color: #d2992288; background: #d299221a; }
+  .scan-chip.empty .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #d29922; flex: 0 0 9px;
+  }
+  .scan-chip.empty .count { color: #d29922; font-weight: 700; }
+  .scan-chip.empty .name { color: #b8945a; }
   .scan-chip.error { border-color: #da363388; background: #da36331f; }
   .scan-chip.error .dot {
     width: 9px; height: 9px; border-radius: 50%;
@@ -174,16 +181,23 @@ def _render_panel(placeholder, query, store_names, state):
     status = info.get("status", "pending")
     count = info.get("count", 0)
     safe_name = html.escape(str(name))
-    if status == "done":
+    if status == "done" and count == 0:
+      chip_class = "empty"
+      count_html = '<span class="count">0 prod.</span>'
+    elif status == "done":
+      chip_class = "done"
       count_html = f'<span class="count">{count} prod.</span>'
     elif status == "running":
+      chip_class = "running"
       count_html = '<span class="count">scanare…</span>'
     elif status == "error":
+      chip_class = "error"
       count_html = '<span class="count">eroare</span>'
     else:
+      chip_class = "pending"
       count_html = '<span class="count">în așteptare</span>'
     chips.append(
-        f'<div class="scan-chip {status}">'
+        f'<div class="scan-chip {chip_class}">'
         f'<span class="dot"></span>'
         f'<span class="name">{safe_name}</span>{count_html}</div>'
     )
@@ -195,7 +209,11 @@ def _render_panel(placeholder, query, store_names, state):
       else "Se pregătesc magazinele…"
   )
   if not running and finished >= len(store_names):
-    live_text = "Scanare finalizată"
+    live_text = (
+        "Scanare finalizată — niciun produs găsit"
+        if total_found == 0
+        else "Scanare finalizată"
+    )
 
   safe_query = html.escape(query)
   panel_html = (
