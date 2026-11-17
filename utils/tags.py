@@ -72,9 +72,12 @@ def classify_category(title: str) -> str:
       "core i", "pentium", "celeron", "athlon", "epyc", "alder lake",
       "rocket lake", "comet lake",
   ]
+  # „Socket"/„soclu" apar în specificațiile legitime ale procesoarelor
+  # (ex. „Socket 1155", „Socket AM4"), deci NU sunt excluse. Accesoriile
+  # sunt prinse de „suport"/„cooler"/„pasta" etc. de mai sus.
   cpu_accessories = [
       "laptop", "cooler", "ventilator", "heatsink", "pasta",
-      "termoconductoare", "suport", "soclu", "socket", "lipici",
+      "termoconductoare", "suport", "lipici",
   ]
   if (re.search(r"\bcpu\b", t) or any(kw in t for kw in cpu_markers)) and not any(
       kw in t for kw in cpu_accessories
