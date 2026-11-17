@@ -7,6 +7,16 @@ def classify_category(title: str) -> str:
 
   t = title.lower()
 
+  # 0. Console / controllere — verificat ÎNAINTE de carcase, baterii etc.,
+  #    altfel „Carcasa Controller PS5 DualSense" ajunge la „Ramă Display"
+  #    doar pentru că titlul conține „carcasa".
+  if any(kw in t for kw in [
+      "joystick", "thumbstick", "playstation", "ps4", "ps5", "xbox",
+      "nintendo", "gamepad", "controller", "maneta joc", "pad ps",
+      "dualsense", "dualshock", "faceplate", "gta6", "grand theft auto",
+  ]):
+    return "Gaming / Console"
+
   # 1. Coolere & Sisteme de Răcire
   if any(kw in t for kw in ["cooler", "ventilator", "heatsink", "radiator"]):
     return "Coolere"
@@ -73,13 +83,6 @@ def classify_category(title: str) -> str:
       "hartie foto", "hârtie foto", "etichete",
   ]):
     return "Consumabile Imprimante"
-
-  # 11. Accesorii gaming / console (joystick, thumbstick, controller etc.)
-  if any(kw in t for kw in [
-      "joystick", "thumbstick", "playstation", "ps4", "ps5", "xbox",
-      "nintendo", "gamepad", "controller", "maneta joc", "pad ps",
-  ]):
-    return "Gaming / Console"
 
   # 12. Consumabile generale (pasta termica, adezivi, suruburi etc.)
   if any(kw in t for kw in [
