@@ -6,7 +6,15 @@
     {"name": "OnLaptop", "domain": "onlaptop.ro", "module": "onlaptop", "enabled": true},
     {"name": "PC Garage", "domain": "pcgarage.ro", "module": "pc_garage", "enabled": true},
     {"name": "Interlink", "domain": "interlink.ro", "module": "interlink", "enabled": true},
+    {"name": "OLX", "domain": "olx.ro", "module": "olx", "enabled": true, "note": "Anunțuri noi și second-hand; parses HTML static prin httpx"},
+    {"name": "Flanco", "domain": "flanco.ro", "module": "flanco", "enabled": true, "note": "Site blocat pentru httpx (403), folosește Playwright"},
     {"name": "Alza", "domain": "alzashop.com", "module": "alza", "enabled": false, "note": "Cloudflare challenge (403) - activează doar dacă rețeaua ta trece de verificare"},
-    {"name": "MediaTek", "domain": "mediatek.ro", "module": "mediatek", "enabled": false, "note": "Site-ul nu răspunde din această rețea (ConnectError)"}
+    {"name": "MediaTek", "domain": "mediatek.ro", "module": "mediatek", "enabled": false, "note": "Site-ul nu răspunde din această rețea (ConnectError)"},
+    {"name": "Altex", "domain": "altex.ro", "module": "altex", "enabled": false, "note": "HTTP2_PROTOCOL_ERROR / timeout din această rețea - necesită investigare"},
+    {"name": "Domo", "domain": "domo.ro", "module": "domo", "enabled": false, "note": "Căutarea returnează zero produse pentru orice termen"},
+    {"name": "Cel.ro", "domain": "cel.ro", "module": "cel_ro", "enabled": false, "note": "Căutarea returnează zero produse pentru orice termen"},
+    {"name": "Okazii", "domain": "okazii.ro", "module": "okazii", "enabled": false, "note": "Pagina de căutare nu returnează produse (posibil bot-protection)"},
+    {"name": "Senso", "domain": "senso.ro", "module": "senso", "enabled": false, "note": "Domeniu parcat - site inactiv"},
+    {"name": "IT-4U", "domain": "it4u.ro", "module": "it_4u", "enabled": false, "note": "Domeniul nu se rezolvă (DNS getaddrinfo failed)"}
   ]
 }

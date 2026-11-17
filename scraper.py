@@ -23,6 +23,8 @@ DEFAULT_STORES = [
     {"name": "OnLaptop", "domain": "onlaptop.ro", "module": "onlaptop", "enabled": True},
     {"name": "PC Garage", "domain": "pcgarage.ro", "module": "pc_garage", "enabled": True},
     {"name": "Interlink", "domain": "interlink.ro", "module": "interlink", "enabled": True},
+    {"name": "OLX", "domain": "olx.ro", "module": "olx", "enabled": True},
+    {"name": "Flanco", "domain": "flanco.ro", "module": "flanco", "enabled": True},
 ]
 
 
