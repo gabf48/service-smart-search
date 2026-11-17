@@ -432,7 +432,8 @@ def set_client_status(client_id, status_id):
   update_client(client_id, status_id=status_id)
 
 
-def list_clients(search="", status_names=None):
+def list_clients(search="", status_names=None, amount_field=None,
+                 min_amount=None, max_amount=None):
   query = """
       SELECT c.id, c.name, c.phone, c.problem, c.notes,
              c.created_at, c.updated_at,
@@ -472,6 +473,31 @@ def list_clients(search="", status_names=None):
     placeholders = ", ".join("?" for _ in status_names)
     query += f" AND s.name IN ({placeholders})"
     params.extend(status_names)
+
+  # Filtre pe sumele agregate (profit / încasări / cheltuieli).
+  # Numele coloanelor vin dintr-un dict fix, nu direct de la utilizator.
+  amount_columns = {
+      "profit": "COALESCE(fin.profit, 0)",
+      "income": "COALESCE(fin.total_income, 0)",
+      "expense": "COALESCE(fin.total_expense, 0)",
+  }
+  if amount_field in amount_columns:
+    column = amount_columns[amount_field]
+    try:
+      low = float(min_amount) if min_amount is not None else None
+    except (TypeError, ValueError):
+      low = None
+    try:
+      high = float(max_amount) if max_amount is not None else None
+    except (TypeError, ValueError):
+      high = None
+    if low is not None:
+      query += f" AND {column} >= ?"
+      params.append(low)
+    if high is not None:
+      query += f" AND {column} <= ?"
+      params.append(high)
+
   query += " ORDER BY c.id DESC"
 
   with get_connection() as conn:

@@ -29,10 +29,11 @@ def _start_search_for_device(device_id, query):
   st.rerun()
 
 
-# --- Client nou ------------------------------------------------------------
+# --- Client nou (dialog) ---------------------------------------------------
 
 
-def _render_add_client():
+@st.dialog("➕ Client nou")
+def _add_client_dialog():
   statuses = db.get_statuses()
   status_names = [s["name"] for s in statuses]
   name_to_id = {s["name"]: s["id"] for s in statuses}
@@ -574,7 +575,55 @@ def _render_client_list():
         "Filtrează după status", status_names, key="clients_status_filter"
     )
 
-  clients = db.list_clients(search=search or "", status_names=selected_statuses)
+  filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([2, 1, 1, 1])
+  with filter_col1:
+    amount_label = st.selectbox(
+        "Filtrează după sumă",
+        ["Profit", "Încasat", "Cheltuit"],
+        key="clients_amount_field",
+    )
+  with filter_col2:
+    min_amount = st.number_input(
+        "Min (Lei)", value=None, step=50.0, placeholder="—",
+        key="clients_min_amount",
+    )
+  with filter_col3:
+    max_amount = st.number_input(
+        "Max (Lei)", value=None, step=50.0, placeholder="—",
+        key="clients_max_amount",
+    )
+  with filter_col4:
+    st.write("")
+    if st.button("🧹 Resetează", key="reset_client_filters"):
+      for key in (
+          "clients_search", "clients_status_filter", "clients_amount_field",
+          "clients_min_amount", "clients_max_amount",
+      ):
+        st.session_state.pop(key, None)
+      st.rerun()
+
+  amount_field = {"Profit": "profit", "Încasat": "income", "Cheltuit": "expense"}[
+      amount_label
+  ]
+  clients = db.list_clients(
+      search=search or "",
+      status_names=selected_statuses,
+      amount_field=amount_field,
+      min_amount=min_amount,
+      max_amount=max_amount,
+  )
+
+  total_income = sum(c["total_income"] for c in clients)
+  total_expense = sum(c["total_expense"] for c in clients)
+  total_profit = total_income - total_expense
+  total_cols = st.columns(3)
+  with total_cols[0]:
+    st.metric("💵 Total încasat", format_money(total_income))
+  with total_cols[1]:
+    st.metric("💸 Total cheltuit", format_money(total_expense))
+  with total_cols[2]:
+    st.metric("📈 Profit total", format_money(total_profit))
+
   st.caption(f"{len(clients)} client/clienti găsiți · selectează un rând pentru detalii")
 
   if not clients:
@@ -677,12 +726,12 @@ def render_clients_page():
   st.title("🧾 Clienți & Service")
   st.markdown("Evidența clienților, a dispozitivelor și a intervențiilor de reparare.")
 
-  tab1, tab2, tab3 = st.tabs(
-      ["➕ Client nou", "📋 Listă clienți", "🏷️ Statusuri"]
-  )
-  with tab1:
-    _render_add_client()
-  with tab2:
+  with st.container(horizontal=True, horizontal_alignment="right"):
+    if st.button("➕ Client nou", icon=":material/person_add:"):
+      _add_client_dialog()
+
+  list_tab, statuses_tab = st.tabs(["📋 Listă clienți", "🏷️ Statusuri"])
+  with list_tab:
     _render_client_list()
-  with tab3:
+  with statuses_tab:
     _render_statuses()
