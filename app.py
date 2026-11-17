@@ -12,6 +12,18 @@ from utils.tags import get_product_tag
 
 setup_page()
 
+app_module = st.sidebar.radio(
+    "Modul aplicație",
+    ["🔍 Căutare piese", "🧾 Clienți & Service"],
+    horizontal=True,
+)
+
+if app_module == "🧾 Clienți & Service":
+  from ui.clients import render_clients_page
+
+  render_clients_page()
+  st.stop()
+
 if "search_results" not in st.session_state:
   st.session_state.search_results = None
 if "last_query" not in st.session_state:
