@@ -149,41 +149,44 @@ def _render_card(item, current_query, is_cheapest, card_key):
         f"</div></div>"
     )
 
+  # Cardul e un container nativ cu bordură, ca butonul de salvare să facă
+  # parte din el, nu să fie randat separat sub un bloc HTML.
   card_html = f"""
-<div class="result-card">
-  <div style="display: flex; gap: 12px; align-items: flex-start;">
-    {image_html}
-    <div style="flex: 1; min-width: 0;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
-        <div>
-          <span style="background: #1f6feb; color: white; padding: 3px 10px; border-radius: 5px; font-size: 0.8rem; font-weight: bold;">{magazin}</span>
-          <span style="background: #238636; color: white; padding: 3px 10px; border-radius: 5px; font-size: 0.8rem; font-weight: bold; margin-left: 8px;">{safe_tag}</span>
-          {cheapest_badge}
-        </div>
-        <span style="font-size: 1.25rem; font-weight: 700; color: #3fb950; white-space: nowrap;">{pret}</span>
+<div style="display: flex; gap: 12px; align-items: flex-start;">
+  {image_html}
+  <div style="flex: 1; min-width: 0;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
+      <div>
+        <span style="background: #1f6feb; color: white; padding: 3px 10px; border-radius: 5px; font-size: 0.8rem; font-weight: bold;">{magazin}</span>
+        <span style="background: #238636; color: white; padding: 3px 10px; border-radius: 5px; font-size: 0.8rem; font-weight: bold; margin-left: 8px;">{safe_tag}</span>
+        {cheapest_badge}
       </div>
-      <div style="font-size: 1.05rem; font-weight: 600; margin-bottom: 6px;">
-        <a href="{link}" target="_blank" style="color: #f0f6fc; text-decoration: none;" onMouseOver="this.style.color='#58a6ff'" onMouseOut="this.style.color='#f0f6fc'">{highlighted_title}</a>
-      </div>
-      <div style="font-size: 0.82rem;">
-        <a href="{link}" target="_blank" style="color: #8b949e; text-decoration: none;" onMouseOver="this.style.color='#58a6ff'" onMouseOut="this.style.color='#8b949e'">🔗 Deschide pagina produsului în magazin</a>
-      </div>
+      <span style="font-size: 1.25rem; font-weight: 700; color: #3fb950; white-space: nowrap;">{pret}</span>
+    </div>
+    <div style="font-size: 1.05rem; font-weight: 600; margin-bottom: 6px;">
+      <a href="{link}" target="_blank" style="color: #f0f6fc; text-decoration: none;" onMouseOver="this.style.color='#58a6ff'" onMouseOut="this.style.color='#f0f6fc'">{highlighted_title}</a>
+    </div>
+    <div style="font-size: 0.82rem;">
+      <a href="{link}" target="_blank" style="color: #8b949e; text-decoration: none;" onMouseOver="this.style.color='#58a6ff'" onMouseOut="this.style.color='#8b949e'">🔗 Deschide pagina produsului în magazin</a>
     </div>
   </div>
 </div>
 """
   rendered_html = textwrap.dedent(card_html).strip()
-  if hasattr(st, "html"):
-    st.html(rendered_html)
-  else:
-    st.markdown(rendered_html, unsafe_allow_html=True)
 
-  if st.button(
-      "➕ Salvează la client",
-      key=f"save_offer_{card_key}",
-      use_container_width=True,
-  ):
-    _save_offer_dialog(item, current_query)
+  with st.container(border=True):
+    if hasattr(st, "html"):
+      st.html(rendered_html)
+    else:
+      st.markdown(rendered_html, unsafe_allow_html=True)
+
+    with st.container(horizontal=True, horizontal_alignment="right"):
+      if st.button(
+          "Salvează la client",
+          icon=":material/bookmark_add:",
+          key=f"save_offer_{card_key}",
+      ):
+        _save_offer_dialog(item, current_query)
 
 
 def render_results(filtered_data, sort_option="Fără sortare"):
