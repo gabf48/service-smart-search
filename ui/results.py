@@ -61,6 +61,7 @@ def _save_offer_dialog(item, query):
       format_func=lambda did: (
           f"📱 {device_by_id[did]['model']}"
           + (f" · MTM {device_by_id[did]['mtm']}" if device_by_id[did].get("mtm") else "")
+          + (f" · ST {device_by_id[did]['service_tag']}" if device_by_id[did].get("service_tag") else "")
           + (f" · S/N {device_by_id[did]['serial_number']}" if device_by_id[did]["serial_number"] else "")
       ),
       key="offer_device_select",

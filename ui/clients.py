@@ -133,7 +133,8 @@ def _render_devices_tab(client):
     saved = offer_counts.get(device["id"], 0)
     suffix = f" · 🔩 {saved} {'ofertă' if saved == 1 else 'oferte'}" if saved else ""
     mtm_hint = f" · MTM: {device['mtm']}" if device.get("mtm") else ""
-    with st.expander(f"📱 {device['model']}{mtm_hint}{suffix}", expanded=False):
+    st_hint = f" · ST: {device['service_tag']}" if device.get("service_tag") else ""
+    with st.expander(f"📱 {device['model']}{mtm_hint}{st_hint}{suffix}", expanded=False):
       if st.button(
           "🔍 Caută piese pentru acest device",
           key=f"search_for_dev_{device['id']}",
@@ -149,11 +150,33 @@ def _render_devices_tab(client):
             placeholder="ex. 20R1000MRT",
         )
         serial = st.text_input("S/N (număr de serie)", value=device["serial_number"] or "")
+        extra1, extra2, extra3 = st.columns(3)
+        with extra1:
+          mfg_yr = st.text_input(
+              "MFG YR", value=device.get("mfg_yr") or "", placeholder="ex. 2023"
+          )
+        with extra2:
+          service_tag = st.text_input(
+              "Service Tag (ST)", value=device.get("service_tag") or "", placeholder="ex. ABC1234"
+          )
+        with extra3:
+          express_code = st.text_input(
+              "Express Service Code (EX)",
+              value=device.get("express_service_code") or "",
+              placeholder="ex. 12345678901",
+          )
         notes = st.text_area("Observații dispozitiv", value=device["notes"] or "", height=70)
         save = st.form_submit_button("💾 Salvează dispozitivul")
       if save:
         db.update_device(
-            device["id"], model=model, mtm=mtm, serial_number=serial, notes=notes
+            device["id"],
+            model=model,
+            mtm=mtm,
+            serial_number=serial,
+            mfg_yr=mfg_yr,
+            service_tag=service_tag,
+            express_service_code=express_code,
+            notes=notes,
         )
         st.success("Dispozitivul a fost actualizat.")
         st.rerun()
@@ -170,6 +193,13 @@ def _render_devices_tab(client):
     model = st.text_input("Model Name / model *", placeholder="ex. Lenovo IdeaPad 3")
     mtm = st.text_input("MTM (Machine Type Model)", placeholder="ex. 20R1000MRT")
     serial = st.text_input("S/N (număr de serie)")
+    extra1, extra2, extra3 = st.columns(3)
+    with extra1:
+      mfg_yr = st.text_input("MFG YR", placeholder="ex. 2023")
+    with extra2:
+      service_tag = st.text_input("Service Tag (ST)", placeholder="ex. ABC1234")
+    with extra3:
+      express_code = st.text_input("Express Service Code (EX)", placeholder="ex. 12345678901")
     notes = st.text_area("Observații", height=60)
     add = st.form_submit_button("Adaugă dispozitiv", use_container_width=True)
   if add:
@@ -177,7 +207,14 @@ def _render_devices_tab(client):
       st.warning("Introdu modelul dispozitivului.")
     else:
       db.add_device(
-          client["id"], model, mtm=mtm, serial_number=serial, notes=notes
+          client["id"],
+          model,
+          mtm=mtm,
+          serial_number=serial,
+          mfg_yr=mfg_yr,
+          service_tag=service_tag,
+          express_service_code=express_code,
+          notes=notes,
       )
       st.success("Dispozitivul a fost adăugat.")
       st.rerun()

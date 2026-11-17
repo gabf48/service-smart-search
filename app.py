@@ -52,6 +52,15 @@ if target_device:
         f"🔗 Cauți piese pentru **{html.escape(target_device['client_name'])}** · "
         f"📱 {html.escape(target_device['model'])}{mtm}{serial}",
     )
+    identifiers = []
+    if target_device.get("service_tag"):
+      identifiers.append(f"ST: `{html.escape(target_device['service_tag'])}`")
+    if target_device.get("express_service_code"):
+      identifiers.append(f"EX: `{html.escape(target_device['express_service_code'])}`")
+    if target_device.get("mfg_yr"):
+      identifiers.append(f"MFG YR: {html.escape(target_device['mfg_yr'])}")
+    if identifiers:
+      st.caption("Identificatori: " + " · ".join(identifiers))
   with clear_col:
     if st.button("✖️ Renunță", use_container_width=True):
       st.session_state.pop("search_target_device_id", None)
