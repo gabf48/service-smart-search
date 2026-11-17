@@ -210,20 +210,42 @@ def init_db():
           DEFAULT_PART_STATUSES,
       )
 
-    # Mută device-ul vechi (un singur text) în tabela de dispozitive.
-    legacy = conn.execute(
-        "SELECT id, device FROM clients WHERE device IS NOT NULL AND device != ''"
-    ).fetchall()
-    for row in legacy:
-      exists = conn.execute(
-          "SELECT 1 FROM devices WHERE client_id = ? AND model = ?",
-          (row["id"], row["device"]),
-      ).fetchone()
-      if not exists:
-        conn.execute(
-            "INSERT INTO devices (client_id, model) VALUES (?, ?)",
-            (row["id"], row["device"]),
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS schema_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
         )
+        """
+    )
+
+    # Mută device-ul vechi (un singur text) în tabela de dispozitive — O DATĂ.
+    # Fără flag, init_db() ar re-insera device-ul după fiecare editare/ștergere.
+    already_migrated = conn.execute(
+        "SELECT value FROM schema_meta WHERE key = 'legacy_devices_migrated'"
+    ).fetchone()
+    if not already_migrated:
+      legacy = conn.execute(
+          "SELECT id, device FROM clients WHERE device IS NOT NULL AND device != ''"
+      ).fetchall()
+      for row in legacy:
+        exists = conn.execute(
+            "SELECT 1 FROM devices WHERE client_id = ? AND model = ?",
+            (row["id"], row["device"]),
+        ).fetchone()
+        if not exists:
+          conn.execute(
+              "INSERT INTO devices (client_id, model) VALUES (?, ?)",
+              (row["id"], row["device"]),
+          )
+      # Câmpul denormalizat rămâne gol: sursa de adevăr e tabela devices.
+      conn.execute(
+          "UPDATE clients SET device = '' WHERE device IS NOT NULL AND device != ''"
+      )
+      conn.execute(
+          "INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)",
+          ("legacy_devices_migrated", "1"),
+      )
 
 
 # --- Statusuri -------------------------------------------------------------
