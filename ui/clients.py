@@ -675,46 +675,59 @@ def _render_client_list():
 
 
 def _render_statuses():
-  st.markdown(
-      "Statusurile pot fi extinse oricând și sunt folosite în tabelul de clienți și în filtre."
-  )
   counts = db.get_status_counts()
   statuses = db.get_statuses()
 
-  for status in statuses:
-    cols = st.columns([3, 1, 1])
-    with cols[0]:
-      st.markdown(
-          _badge(status["name"], status["color"])
-          + f" <span style='color:#8b949e;font-size:0.78rem;'>"
-          f"({counts.get(status['name'], 0)} clienți)</span>",
-          unsafe_allow_html=True,
-      )
-    with cols[2]:
-      confirm_key = f"confirm_delete_status_{status['id']}"
-      if st.checkbox("Șterge", key=confirm_key):
-        if st.button("Confirmă", key=f"del_status_{status['id']}"):
-          if db.delete_status(status["id"]):
-            st.success("Statusul a fost șters.")
-          else:
-            st.warning("Statusul este folosit de cel puțin un client.")
-          st.rerun()
+  feedback = st.session_state.pop("status_feedback", None)
+  if feedback:
+    st.success(feedback)
 
-  st.markdown("---")
-  st.subheader("➕ Status nou")
-  col1, col2 = st.columns([2, 1])
-  with col1:
-    new_name = st.text_input("Nume status", placeholder="ex. În așteptare client")
-  with col2:
-    new_color = st.color_picker("Culoare", value="#1f6feb")
-  if st.button("Adaugă status", use_container_width=True):
-    if not (new_name or "").strip():
-      st.warning("Introdu un nume pentru status.")
-    elif db.add_status(new_name, new_color) is None:
-      st.warning("Există deja un status cu acest nume.")
+  if statuses:
+    badges = " ".join(
+        _badge(status["name"], status["color"])
+        + f"<span style='color:#8b949e;font-size:0.75rem;'>"
+        f"({counts.get(status['name'], 0)})</span>"
+        for status in statuses
+    )
+    st.markdown(badges, unsafe_allow_html=True)
+  else:
+    st.info("Nu există statusuri definite.")
+
+  with st.expander("➕ Adaugă status nou", expanded=False):
+    with st.form("add_status_form"):
+      name_col, color_col = st.columns([3, 1])
+      with name_col:
+        new_name = st.text_input(
+            "Nume status", placeholder="ex. În așteptare client",
+            label_visibility="collapsed",
+        )
+      with color_col:
+        new_color = st.color_picker(
+            "Culoare", value="#1f6feb", label_visibility="collapsed"
+        )
+      add = st.form_submit_button("Adaugă status", use_container_width=True)
+    if add:
+      if not (new_name or "").strip():
+        st.warning("Introdu un nume pentru status.")
+      elif db.add_status(new_name, new_color) is None:
+        st.warning("Există deja un status cu acest nume.")
+      else:
+        st.session_state["status_feedback"] = "Statusul a fost adăugat."
+        st.rerun()
+
+  deletable = [s for s in statuses if counts.get(s["name"], 0) == 0]
+  with st.expander("🗑️ Șterge status", expanded=False):
+    if not deletable:
+      st.caption("Toate statusurile sunt folosite de cel puțin un client.")
     else:
-      st.success("Statusul a fost adăugat.")
-      st.rerun()
+      by_name = {s["name"]: s for s in deletable}
+      to_delete = st.selectbox("Status de șters", list(by_name), key="delete_status_name")
+      if st.button("Confirmă ștergerea", key="delete_status_confirm"):
+        if db.delete_status(by_name[to_delete]["id"]):
+          st.session_state["status_feedback"] = "Statusul a fost șters."
+          st.rerun()
+        else:
+          st.warning("Statusul este folosit de cel puțin un client.")
 
 
 def render_clients_page():
